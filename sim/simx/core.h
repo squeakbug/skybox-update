@@ -26,6 +26,7 @@
 #include "dispatcher.h"
 #include "func_unit.h"
 #include "mem_coalescer.h"
+#include "VX_config.h"
 
 namespace vortex {
 
@@ -107,6 +108,9 @@ public:
   void tick();
 
   void attach_ram(RAM* ram);
+#ifdef VM_ENABLE
+  void set_satp(uint64_t satp);
+#endif
 
   bool running() const;
 

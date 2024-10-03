@@ -5,10 +5,9 @@ CFLAGS += -march=rv64imafd -mabi=lp64d
 else
 CFLAGS += -march=rv32imaf -mabi=ilp32f
 endif
+STARTUP_ADDR ?= 0x80000000
 
 VORTEX_KN_PATH ?= $(ROOT_DIR)/kernel
-
-STARTUP_ADDR ?= 0x80000000
 
 LLVM_CFLAGS += --sysroot=$(RISCV_SYSROOT)
 LLVM_CFLAGS += --gcc-toolchain=$(RISCV_TOOLCHAIN_PATH)

@@ -19,6 +19,8 @@ set -e
 # clear blackbox cache
 rm -f blackbox.*.cache
 
+# HW: add a test "VM Test" to make sure VM feature is enabled
+
 XLEN=${XLEN:=@XLEN@}
 
 XSIZE=$((XLEN / 8))
@@ -223,6 +225,22 @@ CONFIGS="-DEXT_GFX_ENABLE" ./ci/blackbox.sh --driver=rtlsim --app=draw3d --args=
 echo "graphics tests done!"
 }
 
+vm(){
+    echo "begin vm tests..."
+
+    make -C sim/simx clean && CONFIGS="-DVM_ENABLE" make -C sim/simx
+    make -C runtime/simx clean && CONFIGS="-DVM_ENABLE" make -C runtime/simx
+    make -C tests/opencl run-simx
+    make -C tests/regression run-simx
+
+    make -C sim/simx clean && CONFIGS="-DVM_ENABLE -DVM_ADDR_MODE=BARE" make -C sim/simx
+    make -C runtime/simx clean && CONFIGS="-DVM_ENABLE -DVM_ADDR_MODE=BARE" make -C runtime/simx
+    make -C tests/opencl run-simx
+    make -C tests/regression run-simx
+
+    echo "vm tests done!"
+}
+
 cache()
 {
     echo "begin cache tests..."
@@ -350,7 +368,7 @@ config2()
 
     # custom program startup address
     make -C tests/regression/dogfood clean-kernel
-    STARTUP_ADDR=0x40000000 make -C tests/regression/dogfood
+    STARTUP_ADDR=0x80000000 make -C tests/regression/dogfood
     ./ci/blackbox.sh --driver=simx --app=dogfood
     ./ci/blackbox.sh --driver=rtlsim --app=dogfood
     make -C tests/regression/dogfood clean-kernel
@@ -494,6 +512,9 @@ while [ "$1" != "" ]; do
         --cache )
                 tests+=("cache")
                 ;;
+        --vm )
+                tests+=("vm")
+                ;;
         --config1 )
                 tests+=("config1")
                 ;;
@@ -536,6 +557,7 @@ while [ "$1" != "" ]; do
                 tests+=("raster")
                 tests+=("opencl")
                 tests+=("cache")
+                tests+=("vm")
                 tests+=("config1")
                 tests+=("config2")
                 tests+=("debug")
