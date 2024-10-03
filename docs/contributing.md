@@ -15,4 +15,4 @@
 
 
 ## Creating  and Adding Tests
-see `testing.md`
+The CI pipeline the vortex tests. If you are contributing code changes, then review `testing.md` to learn how to integrate your own tests
