@@ -691,6 +691,11 @@
 `define DCACHE_WRITEBACK 0
 `endif
 
+// Enable Cache Dirty bytes
+`ifndef DCACHE_DIRTYBYTES
+`define DCACHE_DIRTYBYTES 0
+`endif
+
 // LMEM Configurable Knobs ////////////////////////////////////////////////////
 
 `ifndef LMEM_DISABLE
@@ -913,6 +918,11 @@
 `define L2_WRITEBACK 0
 `endif
 
+// Enable Cache Dirty bytes
+`ifndef L2_DIRTYBYTES
+`define L2_DIRTYBYTES 0
+`endif
+
 // L3cache Configurable Knobs /////////////////////////////////////////////////
 
 // Cache Size
@@ -953,6 +963,11 @@
 // Enable Cache Writeback
 `ifndef L3_WRITEBACK
 `define L3_WRITEBACK 0
+`endif
+
+// Enable Cache Dirty bytes
+`ifndef L3_DIRTYBYTES
+`define L3_DIRTYBYTES 0
 `endif
 
 `ifndef MEMORY_BANKS
