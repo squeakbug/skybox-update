@@ -128,6 +128,10 @@ private:
 
   uint32_t tex_idx();
 
+  void trigger_ecall(); // Re-added for riscv-vector test functionality
+
+  void trigger_ebreak(); // Re-added for riscv-vector test functionality
+
   const Arch& arch_;
   const DCRS& dcrs_;
   Core*       core_;
