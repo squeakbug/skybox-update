@@ -130,7 +130,7 @@ module VX_sfu_unit import VX_gpu_pkg::*; #(
     );
 
     VX_wctl_unit #(
-        .INSTANCE_ID ($sformatf("%s-wctl", INSTANCE_ID)),
+        .INSTANCE_ID (`SFORMATF(("%s-wctl", INSTANCE_ID))),
         .NUM_LANES (NUM_LANES)
     ) wctl_unit (
         .clk        (clk),
@@ -153,7 +153,7 @@ module VX_sfu_unit import VX_gpu_pkg::*; #(
 `endif
 
     VX_csr_unit #(
-        .INSTANCE_ID ($sformatf("%s-csr", INSTANCE_ID)),
+        .INSTANCE_ID (`SFORMATF(("%s-csr", INSTANCE_ID))),
         .CORE_ID   (CORE_ID),
         .NUM_LANES (NUM_LANES)
     ) csr_unit (
