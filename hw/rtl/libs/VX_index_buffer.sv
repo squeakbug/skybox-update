@@ -17,6 +17,7 @@
 module VX_index_buffer #(
     parameter DATAW = 1,
     parameter SIZE  = 1,
+    parameter LUTRAM = 0,
     parameter ADDRW = `LOG2UP(SIZE)
 ) (
     input  wire             clk,
@@ -50,8 +51,8 @@ module VX_index_buffer #(
     VX_dp_ram #(
         .DATAW (DATAW),
         .SIZE  (SIZE),
-        .OUT_REG (0),
-        .RDW_MODE("W")
+        .LUTRAM (LUTRAM),
+        .RDW_MODE ("W")
     ) data_table (
         .clk   (clk),
         .reset (reset),
