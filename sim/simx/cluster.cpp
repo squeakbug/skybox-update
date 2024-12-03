@@ -21,8 +21,8 @@ Cluster::Cluster(const SimContext& ctx,
                  const Arch &arch,
                  const DCRS &dcrs)
   : SimObject(ctx, "cluster")
-  , mem_req_port(this)
-  , mem_rsp_port(this)
+  , mem_req_ports(L2_MEM_PORTS, this)
+  , mem_rsp_ports(L2_MEM_PORTS, this)
   , cluster_id_(cluster_id)
   , processor_(processor)
   , sockets_(NUM_SOCKETS)
@@ -64,12 +64,6 @@ Cluster::Cluster(const SimContext& ctx,
 
   // create sockets
 
-  snprintf(sname, 100, "cluster%d-icache-arb", cluster_id);
-  auto icache_arb = MemArbiter::Create(sname, ArbiterType::RoundRobin, sockets_per_cluster);
-
-  snprintf(sname, 100, "cluster%d-dcache-arb", cluster_id);
-  auto dcache_arb = MemArbiter::Create(sname, ArbiterType::RoundRobin, sockets_per_cluster);
-
   for (uint32_t i = 0, raster_idx = 0, om_idx = 0, tex_idx = 0; i < sockets_per_cluster; ++i) {
     auto per_socket_raster_units = std::max<uint32_t>((NUM_RASTER_UNITS + sockets_per_cluster - 1 - i) / sockets_per_cluster, 1);
     auto per_socket_om_units = std::max<uint32_t>((NUM_OM_UNITS + sockets_per_cluster - 1 - i) / sockets_per_cluster, 1);
@@ -100,13 +94,6 @@ Cluster::Cluster(const SimContext& ctx,
                                  raster_units,
                                  tex_units,
                                  om_units);
-
-    socket->icache_mem_req_port.bind(&icache_arb->ReqIn.at(i));
-    icache_arb->RspIn.at(i).bind(&socket->icache_mem_rsp_port);
-
-    socket->dcache_mem_req_port.bind(&dcache_arb->ReqIn.at(i));
-    dcache_arb->RspIn.at(i).bind(&socket->dcache_mem_rsp_port);
-
     sockets_.at(i) = socket;
   }
 
@@ -132,7 +119,7 @@ Cluster::Cluster(const SimContext& ctx,
     log2ceil(L2_NUM_WAYS),  // A
     log2ceil(L2_NUM_BANKS), // B
     XLEN,                   // address bits
-    1,                      // number of ports
+    1,                      // ports per bank
     l2_inputs,              // request size ("core <-> cache" ports)
     L2_MEM_PORTS,           // memory ports ("cache <-> memory" ports)
     L2_WRITEBACK,           // write-back
@@ -141,23 +128,27 @@ Cluster::Cluster(const SimContext& ctx,
     2,                      // pipeline latency
   });
 
-  l2cache_->MemReqPorts.at(0).bind(&this->mem_req_port);
-  this->mem_rsp_port.bind(&l2cache_->MemRspPorts.at(0));
+  // connect l2cache memory interfaces
+  for (uint32_t i = 0; i < L2_MEM_PORTS; ++i) {
+    l2cache_->MemReqPorts.at(i).bind(&this->mem_req_ports.at(i));
+    this->mem_rsp_ports.at(i).bind(&l2cache_->MemRspPorts.at(i));
+  }
 
-  size_t port_indx = 0;
 
-  icache_arb->ReqOut.at(0).bind(&l2cache_->CoreReqPorts.at(port_indx));
-  l2cache_->CoreRspPorts.at(port_indx).bind(&icache_arb->RspOut.at(0));
-  port_indx++;
+  // connect l2cache core interfaces
+  for (uint32_t i = 0; i < sockets_per_cluster; ++i) {
+    for (uint32_t j = 0; j < L1_MEM_PORTS; ++j) {
+      sockets_.at(i)->mem_req_ports.at(j).bind(&l2cache_->CoreReqPorts.at(i * L1_MEM_PORTS + j));
+      l2cache_->CoreRspPorts.at(i * L1_MEM_PORTS + j).bind(&sockets_.at(i)->mem_rsp_ports.at(j));
+    }
+  }
 
-  dcache_arb->ReqOut.at(0).bind(&l2cache_->CoreReqPorts.at(port_indx));
-  l2cache_->CoreRspPorts.at(port_indx).bind(&dcache_arb->RspOut.at(0));
-  port_indx++;
+  size_t port_indx = sockets_per_cluster * L1_MEM_PORTS;
 
   // Create tcache
 
   snprintf(sname, 100, "cluster%d-tcaches", cluster_id);
-  tcaches_ = CacheCluster::Create(sname, NUM_TEX_UNITS, NUM_TCACHES, NUM_SFU_LANES, CacheSim::Config{
+  tcaches_ = CacheCluster::Create(sname, NUM_TEX_UNITS, NUM_TCACHES, CacheSim::Config{
     !TCACHE_ENABLED,
     log2ceil(TCACHE_SIZE),  // C
     log2ceil(L1_LINE_SIZE), // L
@@ -165,7 +156,7 @@ Cluster::Cluster(const SimContext& ctx,
     log2ceil(TCACHE_NUM_WAYS), // A
     log2ceil(TCACHE_NUM_BANKS), // B
     XLEN,                   // address bits
-    1,                      // number of ports
+    1,                      // ports per bank
     NUM_SFU_LANES,          // request size ("core <-> cache" ports)
     1,                      // memory ports ("cache <-> memory" ports)
     true,                   // write-through
@@ -174,8 +165,8 @@ Cluster::Cluster(const SimContext& ctx,
     4,                      // pipeline latency
   });
 
-  tcaches_->MemReqPort.bind(&l2cache_->CoreReqPorts.at(port_indx));
-  l2cache_->CoreRspPorts.at(port_indx).bind(&tcaches_->MemRspPort);
+  tcaches_->MemReqPorts.at(0).bind(&l2cache_->CoreReqPorts.at(port_indx));
+  l2cache_->CoreRspPorts.at(port_indx).bind(&tcaches_->MemRspPorts.at(0));
   port_indx++;
 
   for (uint32_t i = 0; i < NUM_TEX_UNITS; ++i) {
@@ -188,7 +179,7 @@ Cluster::Cluster(const SimContext& ctx,
   // Create rcache
 
   snprintf(sname, 100, "cluster%d-rcaches", cluster_id);
-  rcaches_ = CacheCluster::Create(sname, NUM_RASTER_UNITS, NUM_RCACHES, 1, CacheSim::Config{
+  rcaches_ = CacheCluster::Create(sname, NUM_RASTER_UNITS, NUM_RCACHES, CacheSim::Config{
     !RCACHE_ENABLED,
     log2ceil(RCACHE_SIZE),  // C
     log2ceil(MEM_BLOCK_SIZE), // L
@@ -196,7 +187,7 @@ Cluster::Cluster(const SimContext& ctx,
     log2ceil(RCACHE_NUM_WAYS), // A
     log2ceil(RCACHE_NUM_BANKS), // B
     XLEN,                   // address bits
-    1,                      // number of ports
+    1,                      // ports per bank
     1,                      // request size ("core <-> cache" ports)
     1,                      // memory ports ("cache <-> memory" ports)
     true,                   // write-through
@@ -205,8 +196,8 @@ Cluster::Cluster(const SimContext& ctx,
     4,                      // pipeline latency
   });
 
-  rcaches_->MemReqPort.bind(&l2cache_->CoreReqPorts.at(port_indx));
-  l2cache_->CoreRspPorts.at(port_indx).bind(&rcaches_->MemRspPort);
+  rcaches_->MemReqPorts.at(0).bind(&l2cache_->CoreReqPorts.at(port_indx));
+  l2cache_->CoreRspPorts.at(port_indx).bind(&rcaches_->MemRspPorts.at(0));
   port_indx++;
 
   for (uint32_t i = 0; i < NUM_RASTER_UNITS; ++i) {
@@ -217,7 +208,7 @@ Cluster::Cluster(const SimContext& ctx,
   // Create ocache
 
   snprintf(sname, 100, "cluster%d-ocaches", cluster_id);
-  ocaches_ = CacheCluster::Create(sname, NUM_OM_UNITS, NUM_OCACHES, NUM_SFU_LANES, CacheSim::Config{
+  ocaches_ = CacheCluster::Create(sname, NUM_OM_UNITS, NUM_OCACHES, CacheSim::Config{
     !OCACHE_ENABLED,
     log2ceil(OCACHE_SIZE),  // C
     log2ceil(MEM_BLOCK_SIZE), // L
@@ -225,7 +216,7 @@ Cluster::Cluster(const SimContext& ctx,
     log2ceil(OCACHE_NUM_WAYS), // A
     log2ceil(OCACHE_NUM_BANKS), // B
     XLEN,                   // address bits
-    1,                      // number of ports
+    1,                      // ports per bank
     NUM_SFU_LANES,          // request size ("core <-> cache" ports)
     1,                      // memory ports ("cache <-> memory" ports)
     true,                   // write-through
@@ -234,8 +225,8 @@ Cluster::Cluster(const SimContext& ctx,
     4,                      // pipeline latency
   });
 
-  ocaches_->MemReqPort.bind(&l2cache_->CoreReqPorts.at(port_indx));
-  l2cache_->CoreRspPorts.at(port_indx).bind(&ocaches_->MemRspPort);
+  ocaches_->MemReqPorts.at(0).bind(&l2cache_->CoreReqPorts.at(port_indx));
+  l2cache_->CoreRspPorts.at(port_indx).bind(&ocaches_->MemRspPorts.at(0));
   port_indx++;
 
   for (uint32_t i = 0; i < NUM_OM_UNITS; ++i) {
