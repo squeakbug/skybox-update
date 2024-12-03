@@ -82,7 +82,7 @@ Core::Core(const SimContext& ctx,
   // create lsu demux
   for (uint32_t i = 0; i < NUM_LSU_BLOCKS; ++i) {
     snprintf(sname, 100, "core%d-lsu_demux%d", core_id, i);
-    lsu_demux_.at(i) = LocalMemDemux::Create(sname, 1);
+    lsu_demux_.at(i) = LocalMemSwitch::Create(sname, 1);
   }
 
   // create lsu dcache adapter
@@ -145,7 +145,7 @@ Core::Core(const SimContext& ctx,
   // bind commit arbiters
   for (uint32_t i = 0; i < ISSUE_WIDTH; ++i) {
     snprintf(sname, 100, "core%d-commit-arb%d", core_id, i);
-    auto arbiter = TraceSwitch::Create(sname, ArbiterType::RoundRobin, (uint32_t)FUType::Count, 1);
+    auto arbiter = TraceArbiter::Create(sname, ArbiterType::RoundRobin, (uint32_t)FUType::Count, 1);
     for (uint32_t j = 0; j < (uint32_t)FUType::Count; ++j) {
       func_units_.at(j)->Outputs.at(i).bind(&arbiter->Inputs.at(j));
     }
