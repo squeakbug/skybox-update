@@ -90,7 +90,7 @@ extern int vx_upload_kernel_file(vx_device_h hdevice, const char* filename, vx_b
 
   std::ifstream ifs(filename);
   if (!ifs) {
-    std::cout << "error: " << filename << " not found" << std::endl;
+    std::cerr << "Error: " << filename << " not found" << std::endl;
     return -1;
   }
 
@@ -135,7 +135,7 @@ extern int vx_upload_file(vx_device_h hdevice, const char* filename, vx_buffer_h
 
   std::ifstream ifs(filename);
   if (!ifs) {
-    std::cout << "error: " << filename << " not found" << std::endl;
+    std::cerr << "Error: " << filename << " not found" << std::endl;
     return -1;
   }
 
@@ -186,6 +186,8 @@ extern int vx_dump_perf(vx_device_h hdevice, FILE* stream) {
   uint64_t scrb_alu = 0;
   uint64_t scrb_fpu = 0;
   uint64_t scrb_lsu = 0;
+  uint64_t scrb_vpu = 0;
+  uint64_t scrb_tcu = 0;
   uint64_t scrb_csrs = 0;
   uint64_t scrb_wctl = 0;
   uint64_t scrb_tex = 0;
@@ -214,8 +216,6 @@ extern int vx_dump_perf(vx_device_h hdevice, FILE* stream) {
   uint64_t mem_reads = 0;
   uint64_t mem_writes = 0;
   uint64_t mem_lat = 0;
-  uint64_t mem_req_counter = 0;
-  uint64_t mem_ticks = 0;
   // PERF: texunit
   uint64_t tex_mem_reads = 0;
   uint64_t tex_mem_lat = 0;
@@ -244,6 +244,7 @@ extern int vx_dump_perf(vx_device_h hdevice, FILE* stream) {
   uint64_t ocache_write_misses = 0;
   uint64_t ocache_bank_stalls = 0;
   uint64_t ocache_mshr_stalls = 0;
+  uint64_t mem_bank_stalls = 0;
 
   uint64_t num_cores;
   CHECK_ERR(vx_dev_caps(hdevice, VX_CAPS_NUM_CORES, &num_cores), {
@@ -265,6 +266,9 @@ extern int vx_dump_perf(vx_device_h hdevice, FILE* stream) {
   bool l2cache_enable = isa_flags & VX_ISA_EXT_L2CACHE;
   bool l3cache_enable = isa_flags & VX_ISA_EXT_L3CACHE;
   bool lmem_enable    = isa_flags & VX_ISA_EXT_LMEM;
+  bool fpu_enable     = isa_flags & VX_ISA_STD_F;
+  bool vpu_enable     = isa_flags & VX_ISA_STD_V;
+  bool tcu_enable     = isa_flags & VX_ISA_EXT_TCU;
 
   auto perf_class = get_profiling_mode();
 
@@ -336,6 +340,14 @@ extern int vx_dump_perf(vx_device_h hdevice, FILE* stream) {
         CHECK_ERR(vx_mpm_query(hdevice, VX_CSR_MPM_SCRB_LSU, core_id, &scrb_lsu_per_core), {
           return err;
         });
+        uint64_t scrb_vpu_per_core;
+        CHECK_ERR(vx_mpm_query(hdevice, VX_CSR_MPM_SCRB_VPU, core_id, &scrb_vpu_per_core), {
+          return err;
+        });
+        uint64_t scrb_tcu_per_core;
+        CHECK_ERR(vx_mpm_query(hdevice, VX_CSR_MPM_SCRB_TCU, core_id, &scrb_tcu_per_core), {
+          return err;
+        });
         uint64_t scrb_csrs_per_core;
         CHECK_ERR(vx_mpm_query(hdevice, VX_CSR_MPM_SCRB_CSRS, core_id, &scrb_csrs_per_core), {
           return err;
@@ -359,6 +371,8 @@ extern int vx_dump_perf(vx_device_h hdevice, FILE* stream) {
         scrb_alu += scrb_alu_per_core;
         scrb_fpu += scrb_fpu_per_core;
         scrb_lsu += scrb_lsu_per_core;
+        scrb_vpu += scrb_vpu_per_core;
+        scrb_tcu += scrb_tcu_per_core;
         scrb_csrs += scrb_csrs_per_core;
         scrb_wctl += scrb_wctl_per_core;
         scrb_tex += scrb_tex_per_core;
@@ -366,20 +380,38 @@ extern int vx_dump_perf(vx_device_h hdevice, FILE* stream) {
         scrb_om += scrb_om_per_core;
         if (num_cores > 1) {
           uint64_t scrb_total = scrb_alu_per_core + scrb_fpu_per_core + scrb_lsu_per_core + scrb_csrs_per_core + scrb_wctl_per_core + scrb_tex_per_core + scrb_raster_per_core + scrb_om_per_core;
+          if (fpu_enable) {
+            scrb_total += scrb_fpu_per_core;
+          }
+          if (vpu_enable) {
+            scrb_total += scrb_vpu_per_core;
+          }
+          if (tcu_enable) {
+            scrb_total += scrb_tcu_per_core;
+          }
           int scrb_percent_per_core = calcAvgPercent(scrb_stalls_per_core, cycles_per_core);
-          fprintf(stream, "PERF: core%d: scoreboard stalls=%ld (%d%%) (alu=%d%%, fpu=%d%%, lsu=%d%%, csrs=%d%%, wctl=%d%%, tex=%d%%, om=%d%%, raster=%d%%)\n"
-          , core_id
-          , scrb_stalls_per_core
-          , scrb_percent_per_core
-          , calcAvgPercent(scrb_alu_per_core, scrb_total)
-          , calcAvgPercent(scrb_fpu_per_core, scrb_total)
-          , calcAvgPercent(scrb_lsu_per_core, scrb_total)
-          , calcAvgPercent(scrb_csrs_per_core, scrb_total)
-          , calcAvgPercent(scrb_wctl_per_core, scrb_total)
-          , calcAvgPercent(scrb_tex_per_core, scrb_total)
-          , calcAvgPercent(scrb_om_per_core, scrb_total)
-          , calcAvgPercent(scrb_raster_per_core, scrb_total)
+          fprintf(stream, "PERF: core%d: scoreboard stalls=%ld (%d%%) (alu=%d%%, lsu=%d%%, csrs=%d%%, wctl=%d%%, tex=%d%%, om=%d%%, raster=%d%%)\n"
+            , core_id
+            , scrb_stalls_per_core
+            , scrb_percent_per_core
+            , calcAvgPercent(scrb_alu_per_core, scrb_total)
+            , calcAvgPercent(scrb_lsu_per_core, scrb_total)
+            , calcAvgPercent(scrb_csrs_per_core, scrb_total)
+            , calcAvgPercent(scrb_wctl_per_core, scrb_total)
+            , calcAvgPercent(scrb_tex_per_core, scrb_total)
+            , calcAvgPercent(scrb_om_per_core, scrb_total)
+            , calcAvgPercent(scrb_raster_per_core, scrb_total)
           );
+          if (fpu_enable) {
+            fprintf(stream, ", fpu=%d%%", calcAvgPercent(scrb_fpu_per_core, scrb_total));
+          }
+          if (vpu_enable) {
+            fprintf(stream, ", vpu=%d%%", calcAvgPercent(scrb_vpu_per_core, scrb_total));
+          }
+          if (tcu_enable) {
+            fprintf(stream, ", tcu=%d%%", calcAvgPercent(scrb_tcu_per_core, scrb_total));
+          }
+          fprintf(stream, ")\n");
         }
         scrb_stalls += scrb_stalls_per_core;
       }
@@ -486,6 +518,8 @@ extern int vx_dump_perf(vx_device_h hdevice, FILE* stream) {
         fprintf(stream, "PERF: core%d: icache mshr stalls=%ld (utilization=%d%%)\n", core_id, icache_mshr_stalls, mshr_utilization);
       }
 
+      uint64_t dcache_requests_per_core = 0;
+
       if (dcache_enable) {
         // PERF: Dcache
         uint64_t dcache_reads;
@@ -496,6 +530,7 @@ extern int vx_dump_perf(vx_device_h hdevice, FILE* stream) {
         CHECK_ERR(vx_mpm_query(hdevice, VX_CSR_MPM_DCACHE_WRITES, core_id, &dcache_writes), {
           return err;
         });
+        dcache_requests_per_core += dcache_reads + dcache_writes;
         uint64_t dcache_read_misses;
         CHECK_ERR(vx_mpm_query(hdevice, VX_CSR_MPM_DCACHE_MISS_R, core_id, &dcache_read_misses), {
           return err;
@@ -523,6 +558,14 @@ extern int vx_dump_perf(vx_device_h hdevice, FILE* stream) {
         fprintf(stream, "PERF: core%d: dcache bank stalls=%ld (utilization=%d%%)\n", core_id, dcache_bank_stalls, dcache_bank_utilization);
         fprintf(stream, "PERF: core%d: dcache mshr stalls=%ld (utilization=%d%%)\n", core_id, dcache_mshr_stalls, mshr_utilization);
       }
+
+      // PERF: coalescer
+      uint64_t coalescer_misses;
+      CHECK_ERR(vx_mpm_query(hdevice, VX_CSR_MPM_COALESCER_MISS, core_id, &coalescer_misses), {
+        return err;
+      });
+      int coalescer_utilization = calcAvgPercent(dcache_requests_per_core - coalescer_misses, dcache_requests_per_core);
+      fprintf(stream, "PERF: core%d: coalescer misses=%ld (hit ratio=%d%%)\n", core_id, coalescer_misses, coalescer_utilization);
 
       if (l2cache_enable) {
         // PERF: L2cache
@@ -589,10 +632,7 @@ extern int vx_dump_perf(vx_device_h hdevice, FILE* stream) {
         CHECK_ERR(vx_mpm_query(hdevice, VX_CSR_MPM_MEM_LT, core_id, &mem_lat), {
           return err;
         });
-        CHECK_ERR(vx_mpm_query(hdevice, VX_CSR_MPM_MEM_BANK_CNTR, core_id, &mem_req_counter), {
-          return err;
-        });
-        CHECK_ERR(vx_mpm_query(hdevice, VX_CSR_MPM_MEM_BANK_TICK, core_id, &mem_ticks), {
+        CHECK_ERR(vx_mpm_query(hdevice, VX_CSR_MPM_MEM_BANK_ST, core_id, &mem_bank_stalls), {
           return err;
         });
       }
@@ -681,11 +721,10 @@ extern int vx_dump_perf(vx_device_h hdevice, FILE* stream) {
     fprintf(stream, "PERF: scheduler idle=%ld (%d%%)\n", sched_idles, sched_idles_percent);
     fprintf(stream, "PERF: scheduler stalls=%ld (%d%%)\n", sched_stalls, sched_stalls_percent);
     fprintf(stream, "PERF: ibuffer stalls=%ld (%d%%)\n", ibuffer_stalls, ibuffer_percent);
-    fprintf(stream, "PERF: scoreboard stalls=%ld (%d%%) (alu=%d%%, fpu=%d%%, lsu=%d%%, csrs=%d%%, wctl=%d%%, tex=%d%%, om=%d%%, raster=%d%%)\n"
+    fprintf(stream, "PERF: scoreboard stalls=%ld (%d%%) (alu=%d%%, lsu=%d%%, csrs=%d%%, wctl=%d%%, tex=%d%%, om=%d%%, raster=%d%%)\n"
       , scrb_stalls
       , scrb_percent
       , calcAvgPercent(scrb_alu, scrb_total)
-      , calcAvgPercent(scrb_fpu, scrb_total)
       , calcAvgPercent(scrb_lsu, scrb_total)
       , calcAvgPercent(scrb_csrs, scrb_total)
       , calcAvgPercent(scrb_wctl, scrb_total)
@@ -693,6 +732,16 @@ extern int vx_dump_perf(vx_device_h hdevice, FILE* stream) {
       , calcAvgPercent(scrb_om, scrb_total)
       , calcAvgPercent(scrb_raster, scrb_total)
     );
+    if (fpu_enable) {
+      fprintf(stream, ", fpu=%d%%", calcAvgPercent(scrb_fpu, scrb_total));
+    }
+    if (vpu_enable) {
+      fprintf(stream, ", vpu=%d%%", calcAvgPercent(scrb_vpu, scrb_total));
+    }
+    if (tcu_enable) {
+      fprintf(stream, ", tcu=%d%%", calcAvgPercent(scrb_tcu, scrb_total));
+    }
+    fprintf(stream, ")\n");
     fprintf(stream, "PERF: operands stalls=%ld (%d%%)\n", opds_stalls, opds_percent);
     fprintf(stream, "PERF: ifetches=%ld\n", ifetches);
     fprintf(stream, "PERF: loads=%ld\n", loads);
@@ -731,11 +780,15 @@ extern int vx_dump_perf(vx_device_h hdevice, FILE* stream) {
       fprintf(stream, "PERF: l3cache bank stalls=%ld (utilization=%d%%)\n", l3cache_bank_stalls, bank_utilization);
       fprintf(stream, "PERF: l3cache mshr stalls=%ld (utilization=%d%%)\n", l3cache_mshr_stalls, mshr_utilization);
     }
-    int mem_avg_lat = caclAverage(mem_lat, mem_reads);
-    int memory_bank_port_utilization = calcAvgPercent(mem_req_counter, (mem_ticks * num_mem_bank_ports));
-    fprintf(stream, "PERF: memory requests=%ld (reads=%ld, writes=%ld)\n", (mem_reads + mem_writes), mem_reads, mem_writes);
-    fprintf(stream, "PERF: memory latency=%d cycles\n", mem_avg_lat);
-    fprintf(stream, "PERF: memory bank port utilization=%d%%\n", memory_bank_port_utilization);
+
+    {
+      uint64_t mem_requests = mem_reads + mem_writes;
+      int mem_avg_lat = caclAverage(mem_lat, mem_reads);
+      int mem_bank_utilization = calcAvgPercent(mem_requests, mem_requests + mem_bank_stalls);
+      fprintf(stream, "PERF: memory requests=%ld (reads=%ld, writes=%ld)\n", mem_requests, mem_reads, mem_writes);
+      fprintf(stream, "PERF: memory latency=%d cycles\n", mem_avg_lat);
+      fprintf(stream, "PERF: memory bank stalls=%ld (utilization=%d%%)\n", mem_bank_stalls, mem_bank_utilization);
+    }
   } break;
   case VX_DCR_MPM_CLASS_TEX: {
     tex_mem_reads /= num_cores;

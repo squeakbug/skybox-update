@@ -66,13 +66,13 @@ public:
     }
 
     void operator delete(void* ptr) {
-      allocator().deallocate(ptr);
+      allocator().deallocate((Stamp*)ptr);
     }
 
   private:
 
     static MemoryPool<Stamp>& allocator() {
-      static MemoryPool<Stamp> instance(1024);
+      static MemoryPool<Stamp> instance;
       return instance;
     }
   };

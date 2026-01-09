@@ -20,39 +20,49 @@ Cluster::Cluster(const SimContext& ctx,
                  ProcessorImpl* processor,
                  const Arch &arch,
                  const DCRS &dcrs)
-  : SimObject(ctx, "cluster")
-  , mem_req_port(this)
-  , mem_rsp_port(this)
+  : SimObject(ctx, StrFormat("cluster%d", cluster_id))
+  , mem_req_ports(L2_MEM_PORTS, this)
+  , mem_rsp_ports(L2_MEM_PORTS, this)
   , cluster_id_(cluster_id)
   , processor_(processor)
   , sockets_(NUM_SOCKETS)
   , barriers_(arch.num_barriers(), 0)
+#ifdef EXT_RASTER_ENABLE
   , raster_units_(NUM_RASTER_UNITS)
+#endif
+#ifdef EXT_TEX_ENABLE
   , tex_units_(NUM_TEX_UNITS)
+#endif
+#ifdef EXT_OM_ENABLE
   , om_units_(NUM_OM_UNITS)
+#endif
   , cores_per_socket_(arch.socket_size())
 {
   char sname[100];
 
   uint32_t sockets_per_cluster = sockets_.size();
 
+#ifdef EXT_RASTER_ENABLE
   // create raster units
   for (uint32_t i = 0; i < NUM_RASTER_UNITS; ++i) {
     snprintf(sname, 100, "cluster%d-raster_unit%d", cluster_id, i);
     uint32_t raster_idx = cluster_id * NUM_RASTER_UNITS + i;
     uint32_t raster_count = arch.num_clusters() * NUM_RASTER_UNITS;
-    raster_units_.at(i) = RasterUnit::Create(sname, raster_idx, raster_count, arch, dcrs.raster_dcrs, RasterUnit::Config{
-      RASTER_TILE_LOGSIZE,
-      RASTER_BLOCK_LOGSIZE
-    });
+    raster_units_.at(i) = RasterUnit::Create(
+      sname, 
+      raster_idx, 
+      raster_count, 
+      arch, 
+      dcrs.raster_dcrs, 
+      RasterUnit::Config{
+        RASTER_TILE_LOGSIZE,
+        RASTER_BLOCK_LOGSIZE
+      }
+    );
   }
+#endif
 
-  // create om units
-  for (uint32_t i = 0; i < NUM_OM_UNITS; ++i) {
-    snprintf(sname, 100, "cluster%d-om_unit%d", cluster_id, i);
-    om_units_.at(i) = OMUnit::Create(sname, arch, dcrs.om_dcrs);
-  }
-
+#ifdef EXT_TEX_ENABLE
   // create tex units
   for (uint32_t i = 0; i < NUM_TEX_UNITS; ++i) {
     snprintf(sname, 100, "cluster%d-tex_unit%d", cluster_id, i);
@@ -61,58 +71,90 @@ Cluster::Cluster(const SimContext& ctx,
       6, // sampler latency
     });
   }
+#endif
+
+#ifdef EXT_OM_ENABLE
+  // create om units
+  for (uint32_t i = 0; i < NUM_OM_UNITS; ++i) {
+    snprintf(sname, 100, "cluster%d-om_unit%d", cluster_id, i);
+    om_units_.at(i) = OMUnit::Create(sname, arch, dcrs.om_dcrs);
+  }
+#endif
 
   // create sockets
+    for (uint32_t i = 0
+#ifdef EXT_RASTER_ENABLE
+    , raster_idx = 0
+#endif
+#ifdef EXT_TEX_ENABLE
+    , tex_idx = 0
+#endif
+#ifdef EXT_OM_ENABLE
+    , om_idx = 0
+#endif
+    ; i < sockets_per_cluster; ++i) {
 
-  snprintf(sname, 100, "cluster%d-icache-arb", cluster_id);
-  auto icache_switch = MemSwitch::Create(sname, ArbiterType::RoundRobin, sockets_per_cluster);
-
-  snprintf(sname, 100, "cluster%d-dcache-arb", cluster_id);
-  auto dcache_switch = MemSwitch::Create(sname, ArbiterType::RoundRobin, sockets_per_cluster);
-
-  for (uint32_t i = 0, raster_idx = 0, om_idx = 0, tex_idx = 0; i < sockets_per_cluster; ++i) {
-    auto per_socket_raster_units = std::max<uint32_t>((NUM_RASTER_UNITS + sockets_per_cluster - 1 - i) / sockets_per_cluster, 1);
-    auto per_socket_om_units = std::max<uint32_t>((NUM_OM_UNITS + sockets_per_cluster - 1 - i) / sockets_per_cluster, 1);
-    auto per_socket_tex_units = std::max<uint32_t>((NUM_TEX_UNITS + sockets_per_cluster - 1 - i) / sockets_per_cluster, 1);
-
+#ifdef EXT_RASTER_ENABLE
+    auto per_socket_raster_units = std::max<uint32_t>(
+      (NUM_RASTER_UNITS + sockets_per_cluster - 1 - i) / sockets_per_cluster, 
+      1
+    );
     std::vector<RasterUnit::Ptr> raster_units(per_socket_raster_units);
-    std::vector<TexUnit::Ptr> tex_units(per_socket_tex_units);
-    std::vector<OMUnit::Ptr> om_units(per_socket_om_units);
-
     for (uint32_t j = 0; j < per_socket_raster_units; ++j) {
       raster_units.at(j) = raster_units_.at(raster_idx++ % NUM_RASTER_UNITS);
     }
+#endif
 
+#ifdef EXT_TEX_ENABLE
+    auto per_socket_tex_units = std::max<uint32_t>(
+      (NUM_TEX_UNITS + sockets_per_cluster - 1 - i) / sockets_per_cluster, 
+      1
+    );
+    std::vector<TexUnit::Ptr> tex_units(per_socket_tex_units);
     for (uint32_t j = 0; j < per_socket_tex_units; ++j) {
       tex_units.at(j) = tex_units_.at(tex_idx++ % NUM_TEX_UNITS);
     }
+#endif
 
+#ifdef EXT_OM_ENABLE
+    auto per_socket_om_units = std::max<uint32_t>(
+      (NUM_OM_UNITS + sockets_per_cluster - 1 - i) / sockets_per_cluster, 
+      1
+    ); 
+    std::vector<OMUnit::Ptr> om_units(per_socket_om_units);
     for (uint32_t j = 0; j < per_socket_om_units; ++j) {
       om_units.at(j) = om_units_.at(om_idx++ % NUM_OM_UNITS);
     }
+#endif
 
     uint32_t socket_id = cluster_id * sockets_per_cluster + i;
-
-    auto socket = Socket::Create(socket_id,
-                                 this,
-                                 arch,
-                                 dcrs,
-                                 raster_units,
-                                 tex_units,
-                                 om_units);
-
-    socket->icache_mem_req_port.bind(&icache_switch->ReqIn.at(i));
-    icache_switch->RspIn.at(i).bind(&socket->icache_mem_rsp_port);
-
-    socket->dcache_mem_req_port.bind(&dcache_switch->ReqIn.at(i));
-    dcache_switch->RspIn.at(i).bind(&socket->dcache_mem_rsp_port);
-
-    sockets_.at(i) = socket;
+    sockets_.at(i) = Socket::Create(socket_id, this, arch, dcrs
+#ifdef EXT_RASTER_ENABLE
+      , raster_units
+#endif
+#ifdef EXT_TEX_ENABLE
+      , tex_units
+#endif
+#ifdef EXT_OM_ENABLE
+      , om_units
+#endif
+    );
   }
 
   // Create l2cache
 
-  snprintf(sname, 100, "cluster%d-l2cache", cluster_id);
+  snprintf(sname, 100, "%s-l2cache", this->name().c_str());
+  uint8_t l2_inputs = L2_NUM_REQS
+#ifdef EXT_RASTER_ENABLE
+    + 1
+#endif
+#ifdef EXT_TEX_ENABLE
+    + 1
+#endif
+#ifdef EXT_OM_ENABLE
+    + 1
+#endif
+    ;
   l2cache_ = CacheSim::Create(sname, CacheSim::Config{
     !L2_ENABLED,
     log2ceil(L2_CACHE_SIZE),// C
@@ -121,56 +163,33 @@ Cluster::Cluster(const SimContext& ctx,
     log2ceil(L2_NUM_WAYS),  // A
     log2ceil(L2_NUM_BANKS), // B
     XLEN,                   // address bits
-    1,                      // number of ports
-    5,                      // request size
-    true,                   // write-through
+    l2_inputs,              // request size
+    L2_MEM_PORTS,           // memory ports
+    L2_WRITEBACK,           // write-back
     false,                  // write response
     L2_MSHR_SIZE,           // mshr size
     2,                      // pipeline latency
   });
 
-  l2cache_->MemReqPorts.at(0).bind(&this->mem_req_port);
-  this->mem_rsp_port.bind(&l2cache_->MemRspPorts.at(0));
-
-  icache_switch->ReqOut.at(0).bind(&l2cache_->CoreReqPorts.at(0));
-  l2cache_->CoreRspPorts.at(0).bind(&icache_switch->RspOut.at(0));
-
-  dcache_switch->ReqOut.at(0).bind(&l2cache_->CoreReqPorts.at(1));
-  l2cache_->CoreRspPorts.at(1).bind(&dcache_switch->RspOut.at(0));
-
-  // Create tcache
-
-  snprintf(sname, 100, "cluster%d-tcaches", cluster_id);
-  tcaches_ = CacheCluster::Create(sname, NUM_TEX_UNITS, NUM_TCACHES, NUM_SFU_LANES, CacheSim::Config{
-    !TCACHE_ENABLED,
-    log2ceil(TCACHE_SIZE),  // C
-    log2ceil(L1_LINE_SIZE), // L
-    log2ceil(sizeof(uint32_t)), // W
-    log2ceil(TCACHE_NUM_WAYS), // A
-    log2ceil(TCACHE_NUM_BANKS), // B
-    XLEN,                   // address bits
-    1,                      // number of ports
-    TCACHE_NUM_BANKS,       // number of inputs
-    true,                   // write-through
-    false,                  // write response
-    TCACHE_MSHR_SIZE,       // mshr
-    4,                      // pipeline latency
-  });
-
-  tcaches_->MemReqPort.bind(&l2cache_->CoreReqPorts.at(2));
-  l2cache_->CoreRspPorts.at(2).bind(&tcaches_->MemRspPort);
-
-  for (uint32_t i = 0; i < NUM_TEX_UNITS; ++i) {
-    for (uint32_t j = 0; j < NUM_SFU_LANES; ++j) {
-      tex_units_.at(i)->MemReqs.at(j).bind(&tcaches_->CoreReqPorts.at(i).at(j));
-      tcaches_->CoreRspPorts.at(i).at(j).bind(&tex_units_.at(i)->MemRsps.at(j));
+  // connect l2cache core interfaces
+  for (uint32_t i = 0; i < sockets_per_cluster; ++i) {
+    for (uint32_t j = 0; j < L1_MEM_PORTS; ++j) {
+      sockets_.at(i)->mem_req_ports.at(j).bind(&l2cache_->CoreReqPorts.at(i * L1_MEM_PORTS + j));
+      l2cache_->CoreRspPorts.at(i * L1_MEM_PORTS + j).bind(&sockets_.at(i)->mem_rsp_ports.at(j));
     }
   }
 
-  // Create rcache
+  for (uint32_t i = 0; i < L2_MEM_PORTS; ++i) {
+    l2cache_->MemReqPorts.at(i).bind(&this->mem_req_ports.at(i));
+    this->mem_rsp_ports.at(i).bind(&l2cache_->MemRspPorts.at(i));
+  }
 
+  size_t port_indx = sockets_per_cluster * L1_MEM_PORTS;
+
+  // Create rcache
+#ifdef EXT_RASTER_ENABLE
   snprintf(sname, 100, "cluster%d-rcaches", cluster_id);
-  rcaches_ = CacheCluster::Create(sname, NUM_RASTER_UNITS, NUM_RCACHES, 1, CacheSim::Config{
+  rcaches_ = CacheCluster::Create(sname, NUM_RASTER_UNITS, NUM_RCACHES, CacheSim::Config{
     !RCACHE_ENABLED,
     log2ceil(RCACHE_SIZE),  // C
     log2ceil(MEM_BLOCK_SIZE), // L
@@ -178,26 +197,59 @@ Cluster::Cluster(const SimContext& ctx,
     log2ceil(RCACHE_NUM_WAYS), // A
     log2ceil(RCACHE_NUM_BANKS), // B
     XLEN,                   // address bits
-    1,                      // number of ports
-    RCACHE_NUM_BANKS,       // number of inputs
+    1,                      // request size (core <-> cache ports)
+    1,                      // memory ports (cache <-> memory ports)
     true,                   // write-through
     false,                  // write response
-    RCACHE_MSHR_SIZE,       // mshr
+    RCACHE_MSHR_SIZE,       // mshr size
     4,                      // pipeline latency
   });
 
-  rcaches_->MemReqPort.bind(&l2cache_->CoreReqPorts.at(4));
-  l2cache_->CoreRspPorts.at(4).bind(&rcaches_->MemRspPort);
+  rcaches_->MemReqPorts.at(0).bind(&l2cache_->CoreReqPorts.at(port_indx));
+  l2cache_->CoreRspPorts.at(port_indx).bind(&rcaches_->MemRspPorts.at(0));
+  port_indx++;
 
   for (uint32_t i = 0; i < NUM_RASTER_UNITS; ++i) {
     raster_units_.at(i)->MemReqs.bind(&rcaches_->CoreReqPorts.at(i).at(0));
     rcaches_->CoreRspPorts.at(i).at(0).bind(&raster_units_.at(i)->MemRsps);
   }
+#endif
+
+  // Create tcache
+#ifdef EXT_TEX_ENABLE
+  snprintf(sname, 100, "cluster%d-tcaches", cluster_id);
+  tcaches_ = CacheCluster::Create(sname, NUM_TEX_UNITS, NUM_TCACHES, CacheSim::Config{
+    !TCACHE_ENABLED,
+    log2ceil(TCACHE_SIZE),  // C
+    log2ceil(L1_LINE_SIZE), // L
+    log2ceil(sizeof(uint32_t)), // W
+    log2ceil(TCACHE_NUM_WAYS), // A
+    log2ceil(TCACHE_NUM_BANKS), // B
+    XLEN,                   // address bits
+    NUM_SFU_LANES,          // request size (core <-> cache ports)
+    1,                      // memory ports (cache <-> memory ports)
+    true,                   // write-through
+    false,                  // write response
+    TCACHE_MSHR_SIZE,       // mshr size
+    4,                      // pipeline latency
+  });
+
+  tcaches_->MemReqPorts.at(0).bind(&l2cache_->CoreReqPorts.at(port_indx));
+  l2cache_->CoreRspPorts.at(port_indx).bind(&tcaches_->MemRspPorts.at(0));
+  port_indx++;
+
+  for (uint32_t i = 0; i < NUM_TEX_UNITS; ++i) {
+    for (uint32_t j = 0; j < NUM_SFU_LANES; ++j) {
+      tex_units_.at(i)->MemReqs.at(j).bind(&tcaches_->CoreReqPorts.at(i).at(j));
+      tcaches_->CoreRspPorts.at(i).at(j).bind(&tex_units_.at(i)->MemRsps.at(j));
+    }
+  }
+#endif
 
   // Create ocache
-
+#ifdef EXT_OM_ENABLE
   snprintf(sname, 100, "cluster%d-ocaches", cluster_id);
-  ocaches_ = CacheCluster::Create(sname, NUM_OM_UNITS, NUM_OCACHES, NUM_SFU_LANES, CacheSim::Config{
+  ocaches_ = CacheCluster::Create(sname, NUM_OM_UNITS, NUM_OCACHES, CacheSim::Config{
     !OCACHE_ENABLED,
     log2ceil(OCACHE_SIZE),  // C
     log2ceil(MEM_BLOCK_SIZE), // L
@@ -205,16 +257,17 @@ Cluster::Cluster(const SimContext& ctx,
     log2ceil(OCACHE_NUM_WAYS), // A
     log2ceil(OCACHE_NUM_BANKS), // B
     XLEN,                   // address bits
-    1,                      // number of ports
-    OCACHE_NUM_BANKS,       // number of inputs
+    NUM_SFU_LANES,          // request size (core <-> cache ports)
+    1,                      // memory ports (cache <-> memory ports)
     true,                   // write-through
     false,                  // write response
-    OCACHE_MSHR_SIZE,       // mshr
+    OCACHE_MSHR_SIZE,       // mshr size
     4,                      // pipeline latency
   });
 
-  ocaches_->MemReqPort.bind(&l2cache_->CoreReqPorts.at(3));
-  l2cache_->CoreRspPorts.at(3).bind(&ocaches_->MemRspPort);
+  ocaches_->MemReqPorts.at(0).bind(&l2cache_->CoreReqPorts.at(port_indx));
+  l2cache_->CoreRspPorts.at(port_indx).bind(&ocaches_->MemRspPorts.at(0));
+  port_indx++;
 
   for (uint32_t i = 0; i < NUM_OM_UNITS; ++i) {
     for (uint32_t j = 0; j < NUM_SFU_LANES; ++j) {
@@ -222,6 +275,7 @@ Cluster::Cluster(const SimContext& ctx,
       ocaches_->CoreRspPorts.at(i).at(j).bind(&om_units_.at(i)->MemRsps.at(j));
     }
   }
+#endif
 }
 
 Cluster::~Cluster() {
@@ -252,6 +306,14 @@ void Cluster::attach_ram(RAM* ram) {
     om_unit->attach_ram(ram);
   }
 }
+
+#ifdef VM_ENABLE
+void Cluster::set_satp(uint64_t satp) {
+  for (auto& socket : sockets_) {
+    socket->set_satp(satp);
+  }
+}
+#endif
 
 bool Cluster::running() const {
   for (auto& socket : sockets_) {

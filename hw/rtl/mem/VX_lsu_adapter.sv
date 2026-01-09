@@ -29,7 +29,7 @@ module VX_lsu_adapter import VX_gpu_pkg::*; #(
     VX_mem_bus_if.master    mem_bus_if [NUM_LANES]
 );
     localparam REQ_ADDR_WIDTH = `MEM_ADDR_WIDTH - `CLOG2(DATA_SIZE);
-    localparam REQ_DATA_WIDTH = 1 + DATA_SIZE + REQ_ADDR_WIDTH + `MEM_REQ_FLAGS_WIDTH + DATA_SIZE * 8;
+    localparam REQ_DATA_WIDTH = 1 + DATA_SIZE + REQ_ADDR_WIDTH + MEM_FLAGS_WIDTH + DATA_SIZE * 8;
     localparam RSP_DATA_WIDTH = DATA_SIZE * 8;
 
     // handle request unpacking
@@ -92,8 +92,8 @@ module VX_lsu_adapter import VX_gpu_pkg::*; #(
 
     for (genvar i = 0; i < NUM_LANES; ++i) begin : g_mem_bus_rsp
         assign rsp_valid_out[i] = mem_bus_if[i].rsp_valid;
-        assign rsp_data_out[i] = mem_bus_if[i].rsp_data.data;
-        assign rsp_tag_out[i] = mem_bus_if[i].rsp_data.tag;
+        assign rsp_data_out[i]  = mem_bus_if[i].rsp_data.data;
+        assign rsp_tag_out[i]   = mem_bus_if[i].rsp_data.tag;
         assign mem_bus_if[i].rsp_ready = rsp_ready_out[i];
     end
 

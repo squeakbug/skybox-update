@@ -16,7 +16,8 @@
 `TRACING_OFF
 module VX_generic_arbiter #(
     parameter NUM_REQS     = 1,
-    parameter `STRING TYPE = "P",
+    parameter `STRING TYPE = "P", // P: priority, R: round-robin, M: matrix, C: cyclic
+    parameter STICKY       = 0,   // hold the grant until its request is deasserted
     parameter LOG_NUM_REQS = `LOG2UP(NUM_REQS)
 ) (
     input  wire                     clk,
@@ -27,6 +28,8 @@ module VX_generic_arbiter #(
     output wire                     grant_valid,
     input  wire                     grant_ready
 );
+    `STATIC_ASSERT((TYPE == "P" || TYPE == "R" || TYPE == "M" || TYPE == "C"), ("invalid parameter"))
+
     if (TYPE == "P") begin : g_priority
 
         `UNUSED_VAR (clk)
@@ -34,18 +37,23 @@ module VX_generic_arbiter #(
         `UNUSED_VAR (grant_ready)
 
         VX_priority_arbiter #(
-            .NUM_REQS (NUM_REQS)
+            .NUM_REQS (NUM_REQS),
+            .STICKY   (STICKY)
         ) priority_arbiter (
+            .clk          (clk),
+            .reset        (reset),
             .requests     (requests),
             .grant_valid  (grant_valid),
             .grant_index  (grant_index),
-            .grant_onehot (grant_onehot)
+            .grant_onehot (grant_onehot),
+            .grant_ready  (grant_ready)
         );
 
     end else if (TYPE == "R") begin : g_round_robin
 
         VX_rr_arbiter #(
-            .NUM_REQS (NUM_REQS)
+            .NUM_REQS (NUM_REQS),
+            .STICKY   (STICKY)
         ) rr_arbiter (
             .clk          (clk),
             .reset        (reset),
@@ -59,7 +67,8 @@ module VX_generic_arbiter #(
     end else if (TYPE == "M") begin : g_matrix
 
         VX_matrix_arbiter #(
-            .NUM_REQS (NUM_REQS)
+            .NUM_REQS (NUM_REQS),
+            .STICKY   (STICKY)
         ) matrix_arbiter (
             .clk          (clk),
             .reset        (reset),
@@ -73,7 +82,8 @@ module VX_generic_arbiter #(
     end else if (TYPE == "C") begin : g_cyclic
 
         VX_cyclic_arbiter #(
-            .NUM_REQS (NUM_REQS)
+            .NUM_REQS (NUM_REQS),
+            .STICKY   (STICKY)
         ) cyclic_arbiter (
             .clk          (clk),
             .reset        (reset),
@@ -83,10 +93,6 @@ module VX_generic_arbiter #(
             .grant_onehot (grant_onehot),
             .grant_ready  (grant_ready)
         );
-
-    end else begin : g_invalid
-
-        `ERROR(("invalid parameter"));
 
     end
 

@@ -5,7 +5,11 @@ PREFIX ?= build
 
 BUILD_DIR := $(PREFIX)
 
+<<<<<<< HEAD
 .PHONY: unittest scope mem_unit lmem cache fpu core issue vortex top tex raster om
+=======
+.PHONY: unittest scope mem_unit lmem cache fpu tcu core issue vortex top
+>>>>>>> remotes/vortex/master
 
 unittest:
 	mkdir -p unittest/$(BUILD_DIR)
@@ -37,6 +41,7 @@ fpu:
 	cp fpu/Makefile fpu/$(BUILD_DIR)
 	$(MAKE) -C fpu/$(BUILD_DIR) clean && $(MAKE) -C fpu/$(BUILD_DIR) > fpu/$(BUILD_DIR)/build.log 2>&1 &
 
+<<<<<<< HEAD
 tex:
 	mkdir -p tex/$(BUILD_DIR)
 	cp tex/Makefile tex/$(BUILD_DIR)
@@ -51,6 +56,12 @@ raster:
 	mkdir -p raster/$(BUILD_DIR)
 	cp raster/Makefile raster/$(BUILD_DIR)
 	$(MAKE) -C raster/$(BUILD_DIR) clean && $(MAKE) -C raster/$(BUILD_DIR) > raster/$(BUILD_DIR)/build.log 2>&1 &
+=======
+tcu:
+	mkdir -p tcu/$(BUILD_DIR)
+	cp tcu/Makefile tcu/$(BUILD_DIR)
+	$(MAKE) -C tcu/$(BUILD_DIR) clean && $(MAKE) -C tcu/$(BUILD_DIR) > tcu/$(BUILD_DIR)/build.log 2>&1 &
+>>>>>>> remotes/vortex/master
 
 core:
 	mkdir -p core/$(BUILD_DIR)

@@ -8,7 +8,7 @@ DPI_DIR := $(VORTEX_HOME)/hw/dpi
 
 SRC_DIR := $(VORTEX_HOME)/hw/unittest/$(PROJECT)
 
-CXXFLAGS := -I$(SRC_DIR) -I$(VORTEX_HOME)/hw/unittest/common -I$(VORTEX_HOME)/sim/common
+CXXFLAGS := -I$(SRC_DIR) -I$(VORTEX_HOME)/hw/unittest/common -I$(SW_COMMON_DIR)
 
 SRCS := $(DPI_DIR)/util_dpi.cpp
 SRCS += $(SRC_DIR)/main.cpp
@@ -20,5 +20,7 @@ RTL_PKGS :=
 RTL_INCLUDE := -I$(RTL_DIR) -I$(DPI_DIR) -I$(RTL_DIR)/libs
 
 TOP := VX_fifo_queue
+
+PARAMS := -GDATAW=32 -GDEPTH=8
 
 include ../common.mk

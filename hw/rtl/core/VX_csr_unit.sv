@@ -24,8 +24,8 @@ module VX_csr_unit import VX_gpu_pkg::*; #(
     input base_dcrs_t           base_dcrs,
 
 `ifdef PERF_ENABLE
-    VX_mem_perf_if.slave        mem_perf_if,
-    VX_pipeline_perf_if.slave   pipeline_perf_if,
+    input sysmem_perf_t         sysmem_perf,
+    input pipeline_perf_t       pipeline_perf,
 `endif
 
 `ifdef EXT_TEX_ENABLE
@@ -56,12 +56,12 @@ module VX_csr_unit import VX_gpu_pkg::*; #(
     VX_commit_csr_if.slave      commit_csr_if,
     VX_sched_csr_if.slave       sched_csr_if,
     VX_execute_if.slave         execute_if,
-    VX_commit_if.master         commit_if
+    VX_result_if.master         result_if
 );
     `UNUSED_SPARAM (INSTANCE_ID)
     localparam PID_BITS   = `CLOG2(`NUM_THREADS / NUM_LANES);
     localparam PID_WIDTH  = `UP(PID_BITS);
-    localparam DATAW      = `UUID_WIDTH + `NW_WIDTH + NUM_LANES + `PC_BITS + `NR_BITS + 1 + NUM_LANES * `XLEN + PID_WIDTH + 1 + 1;
+    localparam DATAW      = UUID_WIDTH + NW_WIDTH + NUM_LANES + PC_BITS + NUM_REGS_BITS + 1 + NUM_LANES * `XLEN + PID_WIDTH + 1 + 1;
 
     `UNUSED_VAR (execute_if.data.rs3_data)
 
@@ -74,7 +74,7 @@ module VX_csr_unit import VX_gpu_pkg::*; #(
     wire                            csr_req_ready;
 
     wire [`VX_CSR_ADDR_BITS-1:0] csr_addr = execute_if.data.op_args.csr.addr;
-    wire [`NRI_BITS-1:0] csr_imm = execute_if.data.op_args.csr.imm;
+    wire [RV_REGS_BITS-1:0] csr_imm = execute_if.data.op_args.csr.imm;
 
     wire is_fpu_csr = (csr_addr <= `VX_CSR_FCSR);
 
@@ -91,7 +91,7 @@ module VX_csr_unit import VX_gpu_pkg::*; #(
         assign rs1_data[i] = execute_if.data.rs1_data[i];
     end
 
-    wire csr_write_enable = (execute_if.data.op_type == `INST_SFU_CSRRW);
+    wire csr_write_enable = (execute_if.data.op_type == INST_SFU_CSRRW);
 
 `ifdef EXT_TEX_ENABLE
 
@@ -165,8 +165,8 @@ module VX_csr_unit import VX_gpu_pkg::*; #(
         .base_dcrs      (base_dcrs),
 
     `ifdef PERF_ENABLE
-        .mem_perf_if    (mem_perf_if),
-        .pipeline_perf_if(pipeline_perf_if),
+        .sysmem_perf    (sysmem_perf),
+        .pipeline_perf  (pipeline_perf),
     `ifdef EXT_TEX_ENABLE
         .perf_tex_if    (perf_tex_if),
     `endif
@@ -214,7 +214,7 @@ module VX_csr_unit import VX_gpu_pkg::*; #(
     end
 
     for (genvar i = 0; i < NUM_LANES; ++i) begin : g_gtid
-        assign gtid[i] = (`XLEN'(CORE_ID) << (`NW_BITS + `NT_BITS)) + (`XLEN'(execute_if.data.wid) << `NT_BITS) + wtid[i];
+        assign gtid[i] = (`XLEN'(CORE_ID) << (NW_BITS + NT_BITS)) + (`XLEN'(execute_if.data.wid) << NT_BITS) + wtid[i];
     end
 
     always @(*) begin
@@ -237,17 +237,17 @@ module VX_csr_unit import VX_gpu_pkg::*; #(
     // CSR write
 
     assign csr_req_data = execute_if.data.op_args.csr.use_imm ? `XLEN'(csr_imm) : rs1_data[0];
-    assign csr_wr_enable = (csr_write_enable || (| csr_req_data));
+    assign csr_wr_enable = csr_write_enable || (| csr_req_data);
 
     always @(*) begin
         case (execute_if.data.op_type)
-            `INST_SFU_CSRRW: begin
+            INST_SFU_CSRRW: begin
                 csr_write_data = csr_req_data;
             end
-            `INST_SFU_CSRRS: begin
+            INST_SFU_CSRRS: begin
                 csr_write_data = csr_read_data_rw | csr_req_data;
             end
-            //`INST_SFU_CSRRC
+            //INST_SFU_CSRRC
             default: begin
                 csr_write_data = csr_read_data_rw & ~csr_req_data;
             end
@@ -267,9 +267,9 @@ module VX_csr_unit import VX_gpu_pkg::*; #(
         .valid_in  (csr_req_valid),
         .ready_in  (csr_req_ready),
         .data_in   ({execute_if.data.uuid, execute_if.data.wid, execute_if.data.tmask, execute_if.data.PC, execute_if.data.rd, execute_if.data.wb, csr_read_data,       execute_if.data.pid, execute_if.data.sop, execute_if.data.eop}),
-        .data_out  ({commit_if.data.uuid,  commit_if.data.wid,  commit_if.data.tmask,  commit_if.data.PC,  commit_if.data.rd,  commit_if.data.wb,  commit_if.data.data, commit_if.data.pid,  commit_if.data.sop,  commit_if.data.eop}),
-        .valid_out (commit_if.valid),
-        .ready_out (commit_if.ready)
+        .data_out  ({result_if.data.uuid,  result_if.data.wid,  result_if.data.tmask,  result_if.data.PC,  result_if.data.rd,  result_if.data.wb,  result_if.data.data, result_if.data.pid,  result_if.data.sop,  result_if.data.eop}),
+        .valid_out (result_if.valid),
+        .ready_out (result_if.ready)
     );
 
 endmodule

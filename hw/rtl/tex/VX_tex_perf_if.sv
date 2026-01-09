@@ -1,12 +1,12 @@
 //!/bin/bash
 
 // Copyright © 2019-2023
-// 
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 // http://www.apache.org/licenses/LICENSE-2.0
-// 
+//
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -15,6 +15,7 @@
 
 `include "VX_define.vh"
 
+<<<<<<<< HEAD:hw/rtl/tex/VX_tex_perf_if.sv
 interface VX_tex_perf_if ();
 
     wire [`PERF_CTR_BITS-1:0] mem_reads;
@@ -31,6 +32,21 @@ interface VX_tex_perf_if ();
         input mem_reads,
         input mem_latency,
         input stall_cycles
+========
+interface VX_issue_sched_if import VX_gpu_pkg::*; ();
+
+    wire [ISSUE_WIS_W-1:0] wis;
+    wire valid;
+
+    modport master (
+        output valid,
+        output wis
+    );
+
+    modport slave (
+        input valid,
+        input wis
+>>>>>>>> remotes/vortex/master:hw/rtl/interfaces/VX_issue_sched_if.sv
     );
 
 endinterface

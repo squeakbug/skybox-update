@@ -88,38 +88,41 @@
 `define VX_CSR_MPM_IBUF_ST_H            12'hB85
 `define VX_CSR_MPM_SCRB_ST              12'hB06
 `define VX_CSR_MPM_SCRB_ST_H            12'hB86
-`define VX_CSR_MPM_SCRB_ALU             12'hB07
-`define VX_CSR_MPM_SCRB_ALU_H           12'hB87
-`define VX_CSR_MPM_SCRB_FPU             12'hB08
-`define VX_CSR_MPM_SCRB_FPU_H           12'hB88
-`define VX_CSR_MPM_SCRB_LSU             12'hB09
-`define VX_CSR_MPM_SCRB_LSU_H           12'hB89
-`define VX_CSR_MPM_SCRB_SFU             12'hB0A
-`define VX_CSR_MPM_SCRB_SFU_H           12'hB8A
-`define VX_CSR_MPM_OPDS_ST              12'hB0B
-`define VX_CSR_MPM_OPDS_ST_H            12'hB8B
+`define VX_CSR_MPM_OPDS_ST              12'hB07
+`define VX_CSR_MPM_OPDS_ST_H            12'hB87
+`define VX_CSR_MPM_SCRB_ALU             12'hB08
+`define VX_CSR_MPM_SCRB_ALU_H           12'hB88
+`define VX_CSR_MPM_SCRB_FPU             12'hB09
+`define VX_CSR_MPM_SCRB_FPU_H           12'hB89
+`define VX_CSR_MPM_SCRB_LSU             12'hB0A
+`define VX_CSR_MPM_SCRB_LSU_H           12'hB8A
+`define VX_CSR_MPM_SCRB_SFU             12'hB0B
+`define VX_CSR_MPM_SCRB_SFU_H           12'hB8B
+`define VX_CSR_MPM_SCRB_CSRS            12'hB0C
+`define VX_CSR_MPM_SCRB_CSRS_H          12'hB8C
+`define VX_CSR_MPM_SCRB_WCTL            12'hB0D
+`define VX_CSR_MPM_SCRB_WCTL_H          12'hB8D
+`define VX_CSR_MPM_SCRB_VPU             12'hB13
+`define VX_CSR_MPM_SCRB_VPU_H           12'hB93
+`define VX_CSR_MPM_SCRB_TCU             12'hB14
+`define VX_CSR_MPM_SCRB_TCU_H           12'hB94
+`define VX_CSR_MPM_SCRB_TEX             12'hB15
+`define VX_CSR_MPM_SCRB_TEX_H           12'hB95
+`define VX_CSR_MPM_SCRB_OM              12'hB16
+`define VX_CSR_MPM_SCRB_OM_H            12'hB96
+`define VX_CSR_MPM_SCRB_RASTER          12'hB17
+`define VX_CSR_MPM_SCRB_RASTER_H        12'hB97
 // PERF: memory
-`define VX_CSR_MPM_IFETCHES             12'hB0C
-`define VX_CSR_MPM_IFETCHES_H           12'hB8C
-`define VX_CSR_MPM_LOADS                12'hB0D
-`define VX_CSR_MPM_LOADS_H              12'hB8D
-`define VX_CSR_MPM_STORES               12'hB0E
-`define VX_CSR_MPM_STORES_H             12'hB8E
-`define VX_CSR_MPM_IFETCH_LT            12'hB1F
-`define VX_CSR_MPM_IFETCH_LT_H          12'hB9F
-`define VX_CSR_MPM_LOAD_LT              12'hB10
-`define VX_CSR_MPM_LOAD_LT_H            12'hB90
-// SFU: scoreboard
-`define VX_CSR_MPM_SCRB_WCTL            12'hB11
-`define VX_CSR_MPM_SCRB_WCTL_H          12'hB91
-`define VX_CSR_MPM_SCRB_CSRS            12'hB12
-`define VX_CSR_MPM_SCRB_CSRS_H          12'hB92
-`define VX_CSR_MPM_SCRB_TEX             12'hB13
-`define VX_CSR_MPM_SCRB_TEX_H           12'hB93
-`define VX_CSR_MPM_SCRB_OM              12'hB14
-`define VX_CSR_MPM_SCRB_OM_H            12'hB94
-`define VX_CSR_MPM_SCRB_RASTER          12'hB15
-`define VX_CSR_MPM_SCRB_RASTER_H        12'hB95
+`define VX_CSR_MPM_IFETCHES             12'hB0E
+`define VX_CSR_MPM_IFETCHES_H           12'hB8E
+`define VX_CSR_MPM_LOADS                12'hB0F
+`define VX_CSR_MPM_LOADS_H              12'hB8F
+`define VX_CSR_MPM_STORES               12'hB10
+`define VX_CSR_MPM_STORES_H             12'hB90
+`define VX_CSR_MPM_IFETCH_LT            12'hB11
+`define VX_CSR_MPM_IFETCH_LT_H          12'hB91
+`define VX_CSR_MPM_LOAD_LT              12'hB12
+`define VX_CSR_MPM_LOAD_LT_H            12'hB92
 
 // Machine Performance-monitoring memory counters
 // PERF: icache
@@ -175,10 +178,8 @@
 `define VX_CSR_MPM_MEM_WRITES_H         12'hB99
 `define VX_CSR_MPM_MEM_LT               12'hB1A     // memory latency
 `define VX_CSR_MPM_MEM_LT_H             12'hB9A
-`define VX_CSR_MPM_MEM_BANK_CNTR        12'hB1E     // memory bank requests
-`define VX_CSR_MPM_MEM_BANK_CNTR_H      12'hB9E
-`define VX_CSR_MPM_MEM_BANK_TICK        12'hB1F     // memory ticks
-`define VX_CSR_MPM_MEM_BANK_TICK_H      12'hB9F
+`define VX_CSR_MPM_MEM_BANK_ST          12'hB1E     // bank conflicts
+`define VX_CSR_MPM_MEM_BANK_ST_H        12'hB9E
 // PERF: lmem
 `define VX_CSR_MPM_LMEM_READS           12'hB1B     // memory reads
 `define VX_CSR_MPM_LMEM_READS_H         12'hB9B
@@ -186,8 +187,10 @@
 `define VX_CSR_MPM_LMEM_WRITES_H        12'hB9C
 `define VX_CSR_MPM_LMEM_BANK_ST         12'hB1D     // bank conflicts
 `define VX_CSR_MPM_LMEM_BANK_ST_H       12'hB9D
+// PERF: coalescer
+`define VX_CSR_MPM_COALESCER_MISS       12'hB1F     // coalescer misses
+`define VX_CSR_MPM_COALESCER_MISS_H     12'hB9F
 
-// Machine Performance-monitoring memory counters (class 3) ///////////////////
 // <Add your own counters: use addresses hB03..B1F, hB83..hB9F>
 
 // Machine Performance-monitoring texture counters
@@ -256,6 +259,16 @@
 `define VX_CSR_MARCHID                  12'hF12
 `define VX_CSR_MIMPID                   12'hF13
 `define VX_CSR_MHARTID                  12'hF14
+
+// Vector CSRs
+
+`define VX_CSR_VSTART                   12'h008
+`define VX_CSR_VXSAT                    12'h009
+`define VX_CSR_VXRM                     12'h00A
+`define VX_CSR_VCSR                     12'h00F
+`define VX_CSR_VL                       12'hC20
+`define VX_CSR_VTYPE                    12'hC21
+`define VX_CSR_VLENB                    12'hC22
 
 // GPGU CSRs
 

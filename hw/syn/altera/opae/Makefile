@@ -5,7 +5,6 @@ DEVICE_FAMILY ?= arria10
 
 PREFIX ?= build$(XLEN)
 TARGET ?= fpga
-NUM_CORES ?= 1
 
 SRC_DIR := $(VORTEX_HOME)/hw/syn/altera/opae
 
@@ -33,6 +32,7 @@ DBG_TRACE_FLAGS += -DDBG_TRACE_TEX
 DBG_TRACE_FLAGS += -DDBG_TRACE_RASTER
 DBG_TRACE_FLAGS += -DDBG_TRACE_OM
 DBG_TRACE_FLAGS += -DDBG_TRACE_GBAR
+DBG_TRACE_FLAGS += -DDBG_TRACE_TCU
 
 # Control logic analyzer monitors
 DBG_SCOPE_FLAGS += -DDBG_SCOPE_AFU
@@ -50,6 +50,7 @@ ifeq ($(DEVICE_FAMILY), arria10)
     CONFIGS += -DALTERA_A10
 endif
 
+ifdef NUM_CORES
 # cluster configuration
 CONFIGS_1c  := -DNUM_CLUSTERS=1 -DNUM_CORES=1
 CONFIGS_2c  := -DNUM_CLUSTERS=1 -DNUM_CORES=2
@@ -59,13 +60,14 @@ CONFIGS_16c	:= -DNUM_CLUSTERS=1 -DNUM_CORES=16
 CONFIGS_32c := -DNUM_CLUSTERS=2 -DNUM_CORES=16
 CONFIGS_64c := -DNUM_CLUSTERS=4 -DNUM_CORES=16
 CONFIGS += $(CONFIGS_$(NUM_CORES)c)
+endif
 
 # include sources
 RTL_PKGS = $(AFU_DIR)/local_mem_cfg_pkg.sv $(AFU_DIR)/ccip/ccip_if_pkg.sv
 RTL_PKGS += $(RTL_DIR)/VX_gpu_pkg.sv $(RTL_DIR)/fpu/VX_fpu_pkg.sv
 RTL_PKGS += $(RTL_DIR)/tex/VX_tex_pkg.sv $(RTL_DIR)/raster/VX_raster_pkg.sv $(RTL_DIR)/om/VX_om_pkg.sv
 FPU_INCLUDE = -I$(RTL_DIR)/fpu
-ifneq (,$(findstring FPU_FPNEW,$(CONFIGS)))
+ifneq (,$(findstring -DFPU_FPNEW, $(CONFIGS)))
 	RTL_PKGS += $(THIRD_PARTY_DIR)/cvfpu/src/fpnew_pkg.sv $(THIRD_PARTY_DIR)/cvfpu/src/common_cells/src/cf_math_pkg $(THIRD_PARTY_DIR)/cvfpu/src/fpu_div_sqrt_mvp/hdl/defs_div_sqrt_mvp.sv
 	FPU_INCLUDE += -J$(THIRD_PARTY_DIR)/cvfpu/src/common_cells/include -J$(THIRD_PARTY_DIR)/cvfpu/src/common_cells/src -J$(THIRD_PARTY_DIR)/cvfpu/src/fpu_div_sqrt_mvp/hdl -J$(THIRD_PARTY_DIR)/cvfpu/src
 endif
@@ -74,6 +76,21 @@ RASTER_INCLUDE = -I$(RTL_DIR)/raster
 OM_INCLUDE = -I$(RTL_DIR)/om
 RTL_INCLUDE = -I$(RTL_DIR) -I$(DPI_DIR) -I$(RTL_DIR)/libs -I$(RTL_DIR)/interfaces -I$(RTL_DIR)/core -I$(RTL_DIR)/mem -I$(RTL_DIR)/cache -I$(AFU_DIR) -I$(IP_CACHE_DIR)
 RTL_INCLUDE += $(FPU_INCLUDE) $(TEX_INCLUDE) $(RASTER_INCLUDE) $(OM_INCLUDE)
+
+# Add V extension sources
+ifneq (,$(findstring -DEXT_V_ENABLE, $(CONFIGS)))
+	RTL_PKGS += $(RTL_DIR)/vpu/VX_vpu_pkg.sv
+	RTL_INCLUDE += -I$(RTL_DIR)/vpu
+endif
+
+# Add TCU extension sources
+ifneq (,$(findstring -DEXT_TCU_ENABLE, $(CONFIGS)))
+	RTL_PKGS += $(RTL_DIR)/tcu/VX_tcu_pkg.sv
+	RTL_INCLUDE += -I$(RTL_DIR)/tcu
+	RTL_INCLUDE += -I$(RTL_DIR)/tcu/bhf
+	RTL_INCLUDE += -J$(THIRD_PARTY_DIR)/hardfloat/source/RISCV
+	RTL_INCLUDE += -I$(THIRD_PARTY_DIR)/hardfloat/source
+endif
 
 # compilation flags
 CFLAGS += -DSYNTHESIS -DQUARTUS
@@ -108,7 +125,7 @@ ifdef PERF
 endif
 
 # ast dump flags
-XML_CFLAGS = $(filter-out -DSYNTHESIS -DQUARTUS, $(CFLAGS)) $(RTL_PKGS) -I$(AFU_DIR)/ccip -I$(DPI_DIR) -DPLATFORM_PROVIDES_LOCAL_MEMORY -DPLATFORM_MEMORY_BANKS=1 -DPLATFORM_MEMORY_ADDR_WIDTH=32 -DPLATFORM_MEMORY_DATA_WIDTH=512 -DPLATFORM_MEMORY_BURST_CNT_WIDTH=4 -DNOPAE -DSV_DPI
+XML_CFLAGS = $(filter-out -DSYNTHESIS -DQUARTUS, $(CFLAGS)) $(RTL_PKGS) -I$(AFU_DIR)/ccip -I$(DPI_DIR) -DPLATFORM_PROVIDES_LOCAL_MEMORY -DPLATFORM_MEMORY_NUM_BANKS=1 -DNOPAE -DSV_DPI
 
 all: swconfig ip-gen setup build
 

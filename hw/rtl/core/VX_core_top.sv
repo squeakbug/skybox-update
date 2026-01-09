@@ -25,14 +25,14 @@ module VX_core_top import VX_gpu_pkg::*; #(
     input wire                              reset,
 
     input wire                              dcr_write_valid,
-    input wire [`VX_DCR_ADDR_WIDTH-1:0]     dcr_write_addr,
-    input wire [`VX_DCR_DATA_WIDTH-1:0]     dcr_write_data,
+    input wire [VX_DCR_ADDR_WIDTH-1:0]      dcr_write_addr,
+    input wire [VX_DCR_DATA_WIDTH-1:0]      dcr_write_data,
 
     output wire [DCACHE_NUM_REQS-1:0]       dcache_req_valid,
     output wire [DCACHE_NUM_REQS-1:0]       dcache_req_rw,
     output wire [DCACHE_NUM_REQS-1:0][DCACHE_WORD_SIZE-1:0] dcache_req_byteen,
     output wire [DCACHE_NUM_REQS-1:0][DCACHE_ADDR_WIDTH-1:0] dcache_req_addr,
-    output wire [DCACHE_NUM_REQS-1:0][`MEM_REQ_FLAGS_WIDTH-1:0] dcache_req_flags,
+    output wire [DCACHE_NUM_REQS-1:0][MEM_FLAGS_WIDTH-1:0] dcache_req_flags,
     output wire [DCACHE_NUM_REQS-1:0][DCACHE_WORD_SIZE*8-1:0] dcache_req_data,
     output wire [DCACHE_NUM_REQS-1:0][DCACHE_TAG_WIDTH-1:0] dcache_req_tag,
     input  wire [DCACHE_NUM_REQS-1:0]       dcache_req_ready,
@@ -57,12 +57,12 @@ module VX_core_top import VX_gpu_pkg::*; #(
 
 `ifdef GBAR_ENABLE
     output wire                             gbar_req_valid,
-    output wire [`NB_WIDTH-1:0]             gbar_req_id,
-    output wire [`NC_WIDTH-1:0]             gbar_req_size_m1,
-    output wire [`NC_WIDTH-1:0]             gbar_req_core_id,
+    output wire [NB_WIDTH-1:0]              gbar_req_id,
+    output wire [NC_WIDTH-1:0]              gbar_req_size_m1,
+    output wire [NC_WIDTH-1:0]              gbar_req_core_id,
     input wire                              gbar_req_ready,
     input wire                              gbar_rsp_valid,
-    input wire [`NB_WIDTH-1:0]              gbar_rsp_id,
+    input wire [NB_WIDTH-1:0]               gbar_rsp_id,
 `endif
     // Status
     output wire                             busy
@@ -164,22 +164,22 @@ module VX_core_top import VX_gpu_pkg::*; #(
 `endif
 
 `ifdef PERF_ENABLE
-    VX_mem_perf_if mem_perf_if();
-    assign mem_perf_if.icache  = '0;
-    assign mem_perf_if.dcache  = '0;
-    assign mem_perf_if.l2cache = '0;
+    sysmem_perf_t mem_perf;
+    assign mem_perf.icache  = '0;
+    assign mem_perf.dcache  = '0;
+    assign mem_perf.l2cache = '0;
 `ifdef EXT_TEX_ENABLE
-    assign mem_perf_if.tcache  = '0;
+    assign mem_perf.tcache  = '0;
 `endif
 `ifdef EXT_RASTER_ENABLE
-    assign mem_perf_if.rcache  = '0;
+    assign mem_perf.rcache  = '0;
 `endif
 `ifdef EXT_OM_ENABLE
-    assign mem_perf_if.ocache  = '0;
+    assign mem_perf.ocache  = '0;
 `endif
-    assign mem_perf_if.l3cache = '0;
-    assign mem_perf_if.lmem    = '0;
-    assign mem_perf_if.mem     = '0;
+    assign mem_perf.l3cache = '0;
+    assign mem_perf.lmem    = '0;
+    assign mem_perf.mem     = '0;
 `endif
 
 `ifdef SCOPE
@@ -190,7 +190,7 @@ module VX_core_top import VX_gpu_pkg::*; #(
 `endif
 
     VX_core #(
-        .INSTANCE_ID ($sformatf("core")),
+        .INSTANCE_ID (`SFORMATF(("core"))),
         .CORE_ID (CORE_ID)
     ) core (
         `SCOPE_IO_BIND (0)
@@ -198,7 +198,7 @@ module VX_core_top import VX_gpu_pkg::*; #(
         .reset          (reset),
 
     `ifdef PERF_ENABLE
-        .mem_perf_if    (mem_perf_if),
+        .sysmem_perf    (sysmem_perf),
     `endif
 
         .dcr_bus_if     (dcr_bus_if),

@@ -52,7 +52,7 @@ class AluUnit : public FuncUnit {
 public:
   AluUnit(const SimContext& ctx, Core*);
 
-  void tick();
+  void tick() override;
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -61,7 +61,7 @@ class FpuUnit : public FuncUnit {
 public:
   FpuUnit(const SimContext& ctx, Core*);
 
-  void tick();
+  void tick() override;
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -71,14 +71,15 @@ public:
 	LsuUnit(const SimContext& ctx, Core*);
 	~LsuUnit();
 
-	void reset();
-	void tick();
+	void reset() override;
+	void tick() override;
 
 private:
 
  	struct pending_req_t {
 		instr_trace_t* trace;
-		BitVector<> mask;
+		uint32_t count;
+		bool eop;
 	};
 
 	struct lsu_state_t {
@@ -88,7 +89,7 @@ private:
 
 		lsu_state_t() : pending_rd_reqs(LSUQ_IN_SIZE) {}
 
-		void clear() {
+		void reset() {
 			this->pending_rd_reqs.clear();
 			this->fence_trace = nullptr;
 			this->fence_lock = false;
@@ -97,6 +98,8 @@ private:
 
 	std::array<lsu_state_t, NUM_LSU_BLOCKS> states_;
 	uint64_t pending_loads_;
+	std::vector<mem_addr_size_t> pending_addrs_;
+	uint32_t remain_addrs_;
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -105,14 +108,72 @@ class SfuUnit : public FuncUnit {
 public:
 	SfuUnit(const SimContext& ctx, Core*);
 
-	void tick();
-
-private:
-  std::vector<SimPort<instr_trace_t*>*> pending_rsps_;
-  std::vector<RasterUnit::Ptr> raster_units_;
-  std::vector<TexUnit::Ptr>    tex_units_;
-  std::vector<OMUnit::Ptr>     om_units_;
-  uint32_t input_idx_;
+	void tick() override;
 };
+
+///////////////////////////////////////////////////////////////////////////////
+
+#ifdef EXT_TCU_ENABLE
+
+class TcuUnit : public FuncUnit {
+public:
+	TcuUnit(const SimContext& ctx, Core*);
+
+	void tick() override;
+};
+
+#endif
+
+///////////////////////////////////////////////////////////////////////////////
+
+#ifdef EXT_V_ENABLE
+
+class VpuUnit : public FuncUnit {
+public:
+	VpuUnit(const SimContext& ctx, Core*);
+
+	void tick() override;
+};
+
+#endif
+
+///////////////////////////////////////////////////////////////////////////////
+
+#ifdef EXT_RASTER_ENABLE
+
+class RUnit : public FuncUnit {
+public:
+	RUnit(const SimContext& ctx, Core*);
+
+	void tick() override;
+};
+
+#endif
+
+///////////////////////////////////////////////////////////////////////////////
+
+#ifdef EXT_TEX_ENABLE
+
+class TUnit : public FuncUnit {
+public:
+	TUnit(const SimContext& ctx, Core*);
+
+	void tick() override;
+};
+
+#endif
+
+///////////////////////////////////////////////////////////////////////////////
+
+#ifdef EXT_OM_ENABLE
+
+class OUnit : public FuncUnit {
+public:
+	OUnit(const SimContext& ctx, Core*);
+
+	void tick() override;
+};
+
+#endif
 
 }

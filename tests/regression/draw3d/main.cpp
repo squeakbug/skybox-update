@@ -296,8 +296,8 @@ int render(const CGLTrace& trace) {
       // generate mipmaps
       RT_CHECK(GenerateMipmaps(texbuf, mip_offsets, texture.pixels.data(), texture.format, texture.width, texture.height, tex_pitch));
 
-      uint32_t tex_logwidth = log2ceil(texture.width);
-      uint32_t tex_logheight = log2ceil(texture.height);
+      uint32_t tex_logwidth = vortex::log2ceil(texture.width);
+      uint32_t tex_logheight = vortex::log2ceil(texture.height);
 
       int tex_format = graphics::toVXFormat(texture.format);
 
@@ -490,7 +490,7 @@ int main(int argc, char *argv[]) {
   }
 
   // update kernel arguments
-  kernel_arg.log_num_tasks = log2ceil(num_tasks);
+  kernel_arg.log_num_tasks = vortex::log2ceil(num_tasks);
   kernel_arg.sw_tex        = sw_tex;
   kernel_arg.sw_rast       = sw_rast;
   kernel_arg.sw_om         = sw_om;

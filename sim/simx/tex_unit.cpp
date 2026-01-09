@@ -85,6 +85,13 @@ public:
     // send memory request
     auto trace_data = std::dynamic_pointer_cast<TraceData>(trace->data);
 
+    bool is_lsu_store;
+    try {
+      is_lsu_store = std::get<LsuType>(trace->op_type) == LsuType::STORE;
+    } catch (const std::bad_variant_access& _ex) {
+      std::abort();
+    }
+
     uint32_t addr_count = 0;
     for (auto& mem_addr : trace_data->mem_addrs) {
         addr_count += mem_addr.size();
@@ -99,7 +106,7 @@ public:
           for (auto& mem_addr : trace_data->mem_addrs.at(t)) {
               MemReq mem_req;
               mem_req.addr  = mem_addr.addr;
-              mem_req.write = (trace->lsu_type == LsuType::STORE);
+              mem_req.write = is_lsu_store;
               mem_req.tag   = tag;
               mem_req.cid   = trace->cid;
               mem_req.uuid  = trace->uuid;

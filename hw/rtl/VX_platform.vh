@@ -25,11 +25,16 @@
 `ifdef SIMULATION
 
 `define STATIC_ASSERT(cond, msg) \
-generate \
     /* verilator lint_off GENUNNAMED */ \
-    if (!(cond)) $error msg; \
-    /* verilator lint_on GENUNNAMED */ \
-endgenerate
+    initial if (!(cond)) begin \
+        $error msg; \
+    end \
+    /* verilator lint_on GENUNNAMED */
+
+`define PACKAGE_ASSERT(cond) \
+    /* verilator lint_on UNUSED */ \
+    typedef bit [((cond) ? 0 : -1) : 0] static_assertion_at_line_`__LINE__; \
+    /* verilator lint_off UNUSED */
 
 `define ERROR(msg) \
     $error msg
@@ -37,15 +42,12 @@ endgenerate
 `define ASSERT(cond, msg) \
     assert(cond) else $error msg
 
-`define RUNTIME_ASSERT(cond, msg)     \
-    always @(posedge clk) begin       \
-        assert(cond) else $error msg; \
+`define RUNTIME_ASSERT(cond, msg) \
+    always @(posedge clk) begin   \
+        if (!reset) begin         \
+            `ASSERT(cond, msg);   \
+        end                       \
     end
-
-`define __SCOPE
-`define __SCOPE_X
-`define __SCOPE_ON
-`define __SCOPE_OFF
 
 `ifndef TRACING_ALL
 `define TRACING_ON      /* verilator tracing_on */
@@ -81,6 +83,7 @@ endgenerate
                               /* verilator lint_off PINMISSING */ \
                               /* verilator lint_off IMPORTSTAR */ \
                               /* verilator lint_off UNSIGNED */ \
+                              /* verilator lint_off CMPCONST */ \
                               /* verilator lint_off SYMRSVDWORD */
 
 `define IGNORE_WARNINGS_END   /* verilator lint_on UNUSED */ \
@@ -93,6 +96,7 @@ endgenerate
                               /* verilator lint_off PINMISSING */ \
                               /* verilator lint_on IMPORTSTAR */ \
                               /* verilator lint_on UNSIGNED */ \
+                              /* verilator lint_on CMPCONST */ \
                               /* verilator lint_on SYMRSVDWORD */
 
 `define UNUSED_PARAM(x)  /* verilator lint_off UNUSED */ \
@@ -106,7 +110,7 @@ endgenerate
 `define UNUSED_VAR(x)   /* verilator lint_off GENUNNAMED */ \
                         if (1) begin \
                             /* verilator lint_off UNUSED */ \
-                            wire [$bits(x)-1:0] __x = x; \
+                            wire [$bits(x)-1:0] __unused = x; \
                             /* verilator lint_on UNUSED */ \
                         end \
                         /* verilator lint_on GENUNNAMED */
@@ -120,7 +124,8 @@ endgenerate
                         /* verilator lint_on UNUSED */
 
 `ifdef SV_DPI
-`define TRACE(level, args) dpi_trace(level, $sformatf args);
+`define TRACE(level, args) \
+    dpi_trace(level, $sformatf args);
 `else
 `define TRACE(level, args) \
     if (level <= `DEBUG_LEVEL) begin \
@@ -128,15 +133,21 @@ endgenerate
     end
 `endif
 
+`define SFORMATF(x) $sformatf x
+
 `else // SYNTHESIS
 
 `define STATIC_ASSERT(cond, msg)
+`define PACKAGE_ASSERT(cond)
 `define ERROR(msg)                  //
 `define ASSERT(cond, msg)           //
 `define RUNTIME_ASSERT(cond, msg)
 
 `define DEBUG_BLOCK(x)
-`define TRACE(level, args)
+`define TRACE(level, args) \
+    if (level <= `DEBUG_LEVEL) begin \
+    end
+`define SFORMATF(x) ""
 
 `define TRACING_ON
 `define TRACING_OFF
@@ -153,45 +164,48 @@ endgenerate
 `define UNUSED_PIN(x) . x ()
 `define UNUSED_ARG(x) x
 
-`define __SCOPE (* mark_debug="true" *)
-
-`define __SCOPE_X
-
-`define __SCOPE_ON  \
-    `undef __SCOPE_X \
-    `define __SCOPE_X `__SCOPE
-
-`define __SCOPE_OFF  \
-    `undef __SCOPE_X \
-    `define __SCOPE_X
-
 `endif
 
 ///////////////////////////////////////////////////////////////////////////////
 
 `ifdef QUARTUS
 `define MAX_FANOUT      8
-`define IF_DATA_SIZE(x) $bits(x.data)
+`define LATENCY_IMUL    3
+`define FORCE_BRAM(d,w) (((d) >= 64 || (w) >= 16 || ((d) * (w)) >= 512) && ((d) * (w)) >= 64)
+`define USE_BLOCK_BRAM  (* ramstyle = "block" *)
 `define USE_FAST_BRAM   (* ramstyle = "MLAB, no_rw_check" *)
 `define NO_RW_RAM_CHECK (* altera_attribute = "-name add_pass_through_logic_to_inferred_rams off" *)
+`define RW_RAM_CHECK    (* altera_attribute = "-name add_pass_through_logic_to_inferred_rams on" *)
 `define DISABLE_BRAM    (* ramstyle = "logic" *)
 `define PRESERVE_NET    (* preserve *)
+`define BLACKBOX_CELL   (* black_box *)
 `define STRING          string
 `elsif VIVADO
 `define MAX_FANOUT      8
-`define IF_DATA_SIZE(x) $bits(x.data)
+`define LATENCY_IMUL    3
+`define FORCE_BRAM(d,w) (((d) >= 64 || (w) >= 16 || ((d) * (w)) >= 512) && ((d) * (w)) >= 64)
+`define USE_BLOCK_BRAM  (* ram_style = "block" *)
 `define USE_FAST_BRAM   (* ram_style = "distributed" *)
 `define NO_RW_RAM_CHECK (* rw_addr_collision = "no" *)
+`define RW_RAM_CHECK    (* rw_addr_collision = "yes" *)
 `define DISABLE_BRAM    (* ram_style = "registers" *)
 `define PRESERVE_NET    (* keep = "true" *)
+`define BLACKBOX_CELL   (* black_box *)
 `define STRING
+`ifndef SIMULATION
+    `define ASYNC_BRAM_PATCH
+`endif
 `else
 `define MAX_FANOUT      8
-`define IF_DATA_SIZE(x) x.DATA_WIDTH
+`define LATENCY_IMUL    3
+`define FORCE_BRAM(d,w) (((d) >= 64 || (w) >= 16 || ((d) * (w)) >= 512) && ((d) * (w)) >= 64)
+`define USE_BLOCK_BRAM
 `define USE_FAST_BRAM
 `define NO_RW_RAM_CHECK
+`define RW_RAM_CHECK
 `define DISABLE_BRAM
 `define PRESERVE_NET
+`define BLACKBOX_CELL
 `define STRING          string
 `endif
 
@@ -217,7 +231,7 @@ endgenerate
 
 `define CLAMP(x, lo, hi)   (((x) > (hi)) ? (hi) : (((x) < (lo)) ? (lo) : (x)))
 
-`define UP(x)       (((x) != 0) ? (x) : 1)
+`define UP(x)       (((x) > 0) ? (x) : 1)
 
 `define CDIV(n,d)   ((n + d - 1) / (d))
 

@@ -14,22 +14,32 @@ DPI_DIR := $(VORTEX_HOME)/hw/dpi
 AFU_DIR := $(RTL_DIR)/afu/xrt
 SCRIPT_DIR := $(VORTEX_HOME)/hw/scripts
 
-KERNEL ?= fibonacci
+KERNEL ?= vecadd
 
 NCPUS := $(shell lscpu | grep "^Core(s) per socket:" | awk '{print $$4}')
 JOBS ?= $(shell echo $$(( $(NCPUS) > $(MAX_JOBS) ? $(MAX_JOBS) : $(NCPUS) )))
 
 # include paths
 FPU_INCLUDE = -I$(RTL_DIR)/fpu
-ifneq (,$(findstring FPU_FPNEW,$(CONFIGS)))
+ifneq (,$(findstring -DFPU_FPNEW, $(CONFIGS)))
 	FPU_INCLUDE += -J$(THIRD_PARTY_DIR)/cvfpu/src/common_cells/include -J$(THIRD_PARTY_DIR)/cvfpu/src/common_cells/src -J$(THIRD_PARTY_DIR)/cvfpu/src/fpu_div_sqrt_mvp/hdl -J$(THIRD_PARTY_DIR)/cvfpu/src
 endif
-TEX_INCLUDE = -I$(RTL_DIR)/tex
-RASTER_INCLUDE = -I$(RTL_DIR)/raster
-OM_INCLUDE = -I$(RTL_DIR)/om
 RTL_INCLUDE = -I$(RTL_DIR) -I$(RTL_DIR)/libs -I$(RTL_DIR)/interfaces -I$(RTL_DIR)/core -I$(RTL_DIR)/mem -I$(RTL_DIR)/cache
-RTL_INCLUDE += $(FPU_INCLUDE) $(TEX_INCLUDE) $(RASTER_INCLUDE) $(OM_INCLUDE)
+RTL_INCLUDE += $(FPU_INCLUDE)
 RTL_INCLUDE += -I$(SRC_DIR)
+
+# Add V extension sources
+ifneq (,$(findstring -DEXT_V_ENABLE, $(CONFIGS)))
+	RTL_INCLUDE += -I$(RTL_DIR)/vpu
+endif
+
+# Add TCU extension sources
+ifneq (,$(findstring -DEXT_TCU_ENABLE, $(CONFIGS)))
+	RTL_INCLUDE += -I$(RTL_DIR)/tcu
+	RTL_INCLUDE += -I$(RTL_DIR)/tcu/bhf
+	RTL_INCLUDE += -J$(THIRD_PARTY_DIR)/hardfloat/source/RISCV
+	RTL_INCLUDE += -I$(THIRD_PARTY_DIR)/hardfloat/source
+endif
 
 # compilation flags
 CFLAGS += -DNDEBUG -DSYNTHESIS -DVIVADO
@@ -54,19 +64,29 @@ $(KERNEL).bin:
 kernel.bin.coe: $(KERNEL).bin
 	$(SCRIPT_DIR)/bin2coe.py --out=$@ --binfile=8192:$(KERNEL).bin --depth=16384 --wordsize=64 --little_endian
 
+pre_opt_hook.tcl: $(SRC_DIR)/pre_opt_hook.tcl
+	cp $< $@
+
+simulate.tcl: $(SRC_DIR)/simulate.tcl
+	cp $< $@
+
 gen-sources: project_1/sources.txt
 project_1/sources.txt:
 	mkdir -p project_1
 	$(SCRIPT_DIR)/gen_sources.sh $(CFLAGS) -P -Cproject_1/src -Oproject_1/sources.txt
 
 build: done.dcp
-done.dcp: project_1/sources.txt kernel.bin.coe project.tcl
-	MAX_JOBS=$(JOBS) $(VIVADO) -mode batch -source project.tcl -tclargs $(DEVICE) project_1/sources.txt $(SCRIPT_DIR)
+done.dcp: project_1/sources.txt kernel.bin.coe project.tcl pre_opt_hook.tcl
+	MAX_JOBS=$(JOBS) TOOL_DIR=$(SCRIPT_DIR) $(VIVADO) -mode batch -source project.tcl -tclargs $(DEVICE) project_1/sources.txt
 	echo done > done.dcp
 
-run: project_1/project_1.xpr
-	$(VIVADO) project_1/project_1.xpr &
+run: simulate.tcl done.dcp
+	MAX_JOBS=$(JOBS) TOOL_DIR=$(SCRIPT_DIR) $(VIVADO) -mode batch -source simulate.tcl -tclargs project_1/project_1.xpr 50000ns
+
+open: done.dcp
+	TOOL_DIR=$(SCRIPT_DIR) $(VIVADO) project_1/project_1.xpr &
 
 clean:
 	rm -rf project_1 project1.tcl $(KERNEL).bin kernel.bin.coe
 	rm -rf .Xil *.log *.jou *.dcp *.rpt
+

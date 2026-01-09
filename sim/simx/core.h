@@ -22,18 +22,24 @@
 #include "local_mem.h"
 #include "ibuffer.h"
 #include "scoreboard.h"
-#include "operand.h"
+
+#ifdef EXT_V_ENABLE
+#include "voperands.h"
+#include "vec_unit.h"
+#else
+#include "operands.h"
+#endif
+
 #include "dispatcher.h"
 #include "func_unit.h"
 #include "mem_coalescer.h"
+#include "VX_config.h"
 
 namespace vortex {
 
 class Socket;
 class Arch;
 class DCRS;
-
-using TraceSwitch = Mux<instr_trace_t*>;
 
 class Core : public SimObject<Core> {
 public:
@@ -51,9 +57,22 @@ public:
     uint64_t scrb_sfu;
     uint64_t scrb_csrs;
     uint64_t scrb_wctl;
-    uint64_t scrb_tex;
-    uint64_t scrb_om;
+#ifdef EXT_V_ENABLE
+    uint64_t vinstrs;
+    uint64_t scrb_vpu;
+  #endif
+  #ifdef EXT_TCU_ENABLE
+    uint64_t scrb_tcu;
+  #endif
+  #ifdef EXT_RASTER_ENABLE
     uint64_t scrb_raster;
+  #endif
+  #ifdef EXT_TEX_ENABLE
+    uint64_t scrb_tex;
+  #endif
+  #ifdef EXT_OM_ENABLE
+    uint64_t scrb_om;
+  #endif
     uint64_t ifetches;
     uint64_t loads;
     uint64_t stores;
@@ -74,9 +93,22 @@ public:
       , scrb_sfu(0)
       , scrb_csrs(0)
       , scrb_wctl(0)
-      , scrb_tex(0)
-      , scrb_om(0)
+    #ifdef EXT_V_ENABLE
+      , vinstrs(0)
+      , scrb_vpu(0)
+    #endif
+    #ifdef EXT_TCU_ENABLE
+      , scrb_tcu(0)
+    #endif
+    #ifdef EXT_RASTER_ENABLE
       , scrb_raster(0)
+    #endif
+    #ifdef EXT_TEX_ENABLE
+      , scrb_tex(0)
+    #endif
+    #ifdef EXT_OM_ENABLE
+      , scrb_om(0)
+    #endif
       , ifetches(0)
       , loads(0)
       , stores(0)
@@ -95,10 +127,17 @@ public:
        uint32_t core_id,
        Socket* socket,
        const Arch &arch,
-       const DCRS &dcrs,
-       const std::vector<RasterUnit::Ptr>& raster_units,
-       const std::vector<TexUnit::Ptr>& tex_units,
-       const std::vector<OMUnit::Ptr>& om_units);
+       const DCRS &dcrs
+    #ifdef EXT_RASTER_ENABLE
+       , const std::vector<RasterUnit::Ptr>& raster_units
+    #endif
+    #ifdef EXT_TEX_ENABLE
+       , const std::vector<TexUnit::Ptr>& tex_units
+    #endif
+    #ifdef EXT_OM_ENABLE
+       , const std::vector<OMUnit::Ptr>& om_units
+    #endif
+  );
 
   ~Core();
 
@@ -107,6 +146,9 @@ public:
   void tick();
 
   void attach_ram(RAM* ram);
+#ifdef VM_ENABLE
+  void set_satp(uint64_t satp);
+#endif
 
   bool running() const;
 
@@ -132,21 +174,53 @@ public:
     return local_mem_;
   }
 
+  const MemCoalescer::Ptr& mem_coalescer(uint32_t idx) const {
+    return mem_coalescers_.at(idx);
+  }
+
+#ifdef EXT_RASTER_ENABLE
   std::vector<RasterUnit::Ptr>& raster_units() {
     return raster_units_;
   }
+#endif
 
+#ifdef EXT_TEX_ENABLE
   std::vector<TexUnit::Ptr>& tex_units() {
     return tex_units_;
   }
+#endif
 
+#ifdef EXT_OM_ENABLE
   std::vector<OMUnit::Ptr>& om_units() {
     return om_units_;
   }
+#endif
 
-  const PerfStats& perf_stats() const {
-    return perf_stats_;
+  void dcache_read(void* data, uint64_t addr, uint32_t size) {
+    return emulator_.dcache_read(data, addr, size);
   }
+
+  void dcache_write(const void* data, uint64_t addr, uint32_t size) {
+    return emulator_.dcache_write(data, addr, size);
+  }
+
+#ifdef EXT_TCU_ENABLE
+  TensorUnit::Ptr& tensor_unit() {
+    return tensor_unit_;
+  }
+#endif
+
+#ifdef EXT_V_ENABLE
+  VecUnit::Ptr& vec_unit() {
+    return vec_unit_;
+  }
+#endif
+
+  auto& trace_pool() {
+    return trace_pool_;
+  }
+
+  const PerfStats& perf_stats() const;
 
   int get_exitcode() const;
 
@@ -163,37 +237,51 @@ private:
   Socket* socket_;
   const Arch& arch_;
 
+#ifdef EXT_TCU_ENABLE
+  TensorUnit::Ptr tensor_unit_;
+#endif
+
+#ifdef EXT_V_ENABLE
+  VecUnit::Ptr vec_unit_;
+#endif
+
+#ifdef EXT_RASTER_ENABLE
   std::vector<RasterUnit::Ptr> raster_units_;
+#endif
+#ifdef EXT_TEX_ENABLE
   std::vector<TexUnit::Ptr> tex_units_;
+#endif
+#ifdef EXT_OM_ENABLE
   std::vector<OMUnit::Ptr> om_units_;
+#endif
 
   Emulator emulator_;
 
   std::vector<IBuffer> ibuffers_;
   Scoreboard scoreboard_;
-  std::vector<Operand::Ptr> operands_;
+  std::vector<Operands::Ptr> operands_;
   std::vector<Dispatcher::Ptr> dispatchers_;
   std::vector<FuncUnit::Ptr> func_units_;
   LocalMem::Ptr local_mem_;
-  std::vector<LocalMemDemux::Ptr> lsu_demux_;
+  std::vector<LocalMemSwitch::Ptr> lmem_switch_;
   std::vector<MemCoalescer::Ptr> mem_coalescers_;
-  std::vector<LsuMemAdapter::Ptr> lsu_dcache_adapter_;
-  std::vector<LsuMemAdapter::Ptr> lsu_lmem_adapter_;
 
   PipelineLatch fetch_latch_;
   PipelineLatch decode_latch_;
 
   HashTable<instr_trace_t*> pending_icache_;
-  uint64_t pending_instrs_;
+  std::list<instr_trace_t*, PoolAllocator<instr_trace_t*, 64>> pending_instrs_;
 
   uint64_t pending_ifetches_;
 
-  PerfStats perf_stats_;
+  mutable PerfStats perf_stats_;
 
-  std::vector<TraceSwitch::Ptr> commit_arbs_;
+  std::vector<TraceArbiter::Ptr> commit_arbs_;
 
   uint32_t commit_exe_;
-  uint32_t ibuffer_idx_;
+  std::vector<Arbiter> ibuffer_arbs_;
+
+  PoolAllocator<instr_trace_t, 64> trace_pool_;
 
   friend class LsuUnit;
   friend class AluUnit;

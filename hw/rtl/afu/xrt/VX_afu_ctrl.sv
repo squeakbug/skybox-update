@@ -13,7 +13,7 @@
 
 `include "vortex_afu.vh"
 
-module VX_afu_ctrl #(
+module VX_afu_ctrl import VX_gpu_pkg::*; #(
     parameter S_AXI_ADDR_WIDTH = 8,
     parameter S_AXI_DATA_WIDTH = 32
 ) (
@@ -50,14 +50,16 @@ module VX_afu_ctrl #(
     input  wire                         ap_idle,
     output wire                         interrupt,
 
+    output wire                         ap_ctrl_read,
+
 `ifdef SCOPE
     input wire                          scope_bus_in,
     output wire                         scope_bus_out,
 `endif
 
     output wire                         dcr_wr_valid,
-    output wire [`VX_DCR_ADDR_WIDTH-1:0] dcr_wr_addr,
-    output wire [`VX_DCR_DATA_WIDTH-1:0] dcr_wr_data
+    output wire [VX_DCR_ADDR_WIDTH-1:0] dcr_wr_addr,
+    output wire [VX_DCR_DATA_WIDTH-1:0] dcr_wr_data
 );
 
     // Address Info
@@ -132,10 +134,12 @@ module VX_afu_ctrl #(
         RSTATE_RESP     = 2'd2,
         RSTATE_WIDTH    = 2;
 
+    localparam MEMORY_BANK_ADDR_WIDTH = `PLATFORM_MEMORY_ADDR_WIDTH - `CLOG2(`PLATFORM_MEMORY_NUM_BANKS);
+
     // device caps
     wire [63:0] dev_caps = {8'b0,
-                            5'(`PLATFORM_MEMORY_ADDR_WIDTH-20),
-                            3'(`CLOG2(`PLATFORM_MEMORY_BANKS)),
+                            5'(MEMORY_BANK_ADDR_WIDTH-20),
+                            3'(`CLOG2(`PLATFORM_MEMORY_NUM_BANKS)),
                             8'(`LMEM_ENABLED ? `LMEM_LOG_SIZE : 0),
                             16'(`NUM_CORES * `NUM_CLUSTERS),
                             8'(`NUM_WARPS),
@@ -368,7 +372,7 @@ module VX_afu_ctrl #(
         end else begin
             case (rstate)
             RSTATE_ADDR: rstate <= s_axi_ar_fire ? RSTATE_DATA : RSTATE_ADDR;
-            RSTATE_DATA: rstate <= (~rvalid_stall) ? RSTATE_RESP : RSTATE_DATA;
+            RSTATE_DATA: rstate <= rvalid_stall ? RSTATE_DATA : RSTATE_RESP;
             RSTATE_RESP: rstate <= s_axi_r_fire ? RSTATE_ADDR : RSTATE_RESP;
             default:     rstate <= RSTATE_ADDR;
             endcase
@@ -430,8 +434,10 @@ module VX_afu_ctrl #(
     assign ap_start  = ap_start_r;
     assign interrupt = gie_r & (| isr_r);
 
+    assign ap_ctrl_read = s_axi_r_fire && (raddr == ADDR_AP_CTRL);
+
     assign dcr_wr_valid = dcr_wr_valid_r;
-    assign dcr_wr_addr  = `VX_DCR_ADDR_WIDTH'(dcra_r);
-    assign dcr_wr_data  = `VX_DCR_DATA_WIDTH'(dcrv_r);
+    assign dcr_wr_addr  = VX_DCR_ADDR_WIDTH'(dcra_r);
+    assign dcr_wr_data  = VX_DCR_DATA_WIDTH'(dcrv_r);
 
 endmodule
