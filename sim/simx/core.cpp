@@ -50,7 +50,7 @@ Core::Core(const SimContext& ctx,
     , operands_(ISSUE_WIDTH)
     , dispatchers_((uint32_t)FUType::Count)
     , func_units_((uint32_t)FUType::Count)
-    , lsu_demux_(NUM_LSU_BLOCKS)
+    , lmem_switch_(NUM_LSU_BLOCKS)
     , mem_coalescers_(NUM_LSU_BLOCKS)
     , lsu_dcache_adapter_(NUM_LSU_BLOCKS)
     , lsu_lmem_adapter_(NUM_LSU_BLOCKS)

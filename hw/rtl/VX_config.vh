@@ -768,6 +768,11 @@
 `define TCACHE_NUM_BANKS 1
 `endif
 
+// Number of memory ports
+`ifndef TCACHE_MEM_PORTS
+`define TCACHE_MEM_PORTS 1
+`endif
+
 // Core Response Queue Size
 `ifndef TCACHE_CRSQ_SIZE
 `define TCACHE_CRSQ_SIZE 2
@@ -822,6 +827,11 @@
 `define RCACHE_NUM_BANKS 1
 `endif
 
+// Number of mem ports
+`ifndef RCACHE_MEM_PORTS
+`define RCACHE_MEM_PORTS 1
+`endif
+
 // Core Response Queue Size
 `ifndef RCACHE_CRSQ_SIZE
 `define RCACHE_CRSQ_SIZE 2
@@ -874,6 +884,11 @@
 // Number of Banks
 `ifndef OCACHE_NUM_BANKS
 `define OCACHE_NUM_BANKS 1
+`endif
+
+// Number of memory ports
+`ifndef OCACHE_MEM_PORTS
+`define OCACHE_MEM_PORTS 1
 `endif
 
 // Core Response Queue Size

@@ -74,15 +74,7 @@ module VX_cluster import VX_gpu_pkg::*; #(
         .TAG_WIDTH (L2_TAG_WIDTH)
     ) l2_mem_bus_if[L2_NUM_REQS]();
 
-    VX_mem_bus_if #(
-        .DATA_SIZE (`L1_LINE_SIZE),
-        .TAG_WIDTH (L1_MEM_ARB_TAG_WIDTH)
-    ) per_socket_mem_bus_if[`NUM_SOCKETS]();
-
-    for (genvar i = 0; i < `NUM_SOCKETS; ++i) begin : g_l2_mem_bus_if
-        `ASSIGN_VX_MEM_BUS_IF_X (l2_mem_bus_if[i], per_socket_mem_bus_if[i], L2_TAG_WIDTH, L1_MEM_ARB_TAG_WIDTH);
-    end
-
+    
 `ifdef GBAR_ENABLE
 
     VX_gbar_bus_if per_socket_gbar_bus_if[`NUM_SOCKETS]();
@@ -192,6 +184,10 @@ module VX_cluster import VX_gpu_pkg::*; #(
         .TAG_WIDTH (L1_MEM_ARB_TAG_WIDTH)
     ) per_socket_mem_bus_if[`NUM_SOCKETS * `L1_MEM_PORTS]();
 
+    for (genvar i = 0; i < `NUM_SOCKETS; ++i) begin : g_l2_mem_bus_if
+        `ASSIGN_VX_MEM_BUS_IF_EX (l2_mem_bus_if[i], per_socket_mem_bus_if[i], L2_TAG_WIDTH, L1_MEM_ARB_TAG_WIDTH, `UUID_WIDTH);
+    end
+
     `RESET_RELAY (l2_reset, reset);
 
     VX_cache_wrap #(
@@ -225,7 +221,7 @@ module VX_cluster import VX_gpu_pkg::*; #(
         .cache_perf     (mem_perf_tmp_if.l2cache),
     `endif
         .core_bus_if    (l2_mem_bus_if),
-        .mem_bus_if     (mem_bus2_if)
+        .mem_bus_if     (mem_bus_if)
     );
 
     ///////////////////////////////////////////////////////////////////////////

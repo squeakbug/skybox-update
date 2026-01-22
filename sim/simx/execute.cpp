@@ -1447,7 +1447,6 @@ void Emulator::execute(const Instr &instr, uint32_t wid, instr_trace_t *trace) {
       std::abort();
     }
   } break;
-<<<<<<< HEAD
   case Opcode::EXT2: {
     switch (func3) {
     case 0: { // TEX
